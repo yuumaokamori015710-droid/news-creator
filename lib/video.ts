@@ -17,6 +17,7 @@ export async function generateVideo(project: Project) {
 
   const title = sanitizeDrawText(project.shortsTitle || project.news?.titleEn || "Japan News");
   const subtitlePath = project.subtitlePath.replace(/\\/g, "/").replace(/:/g, "\\:");
+  const countdown = "drawtext=text='%{eif\\:max(0\\,60-t)\\:d}s':fontcolor=white:fontsize=56:x=w-tw-72:y=118:box=1:boxcolor=black@0.55:boxborderw=18";
   const args = [
     "-y",
     "-loop",
@@ -26,7 +27,7 @@ export async function generateVideo(project: Project) {
     "-i",
     project.audioPath,
     "-vf",
-    `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p,drawbox=x=0:y=0:w=1080:h=1920:color=black@0.28:t=fill,drawtext=text='${title}':fontcolor=white:fontsize=60:x=72:y=120:box=1:boxcolor=black@0.45:boxborderw=22,subtitles='${subtitlePath}'`,
+    `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p,drawbox=x=0:y=0:w=1080:h=1920:color=black@0.28:t=fill,drawtext=text='${title}':fontcolor=white:fontsize=60:x=72:y=120:box=1:boxcolor=black@0.45:boxborderw=22,${countdown},subtitles='${subtitlePath}'`,
     "-r",
     "30",
     "-c:v",

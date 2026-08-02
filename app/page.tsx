@@ -43,7 +43,7 @@ const tones = [
 ];
 
 const workflow = [
-  { key: "news", label: "ニュース選択", detail: "3件から1件を選ぶ" },
+  { key: "news", label: "ニュース選択", detail: "5件から1件を選ぶ" },
   { key: "script", label: "台本", detail: "大きく確認して編集" },
   { key: "audio", label: "音声", detail: "録音またはアップロード" },
   { key: "video", label: "字幕・素材・動画", detail: "字幕と素材を作って生成" },
@@ -366,23 +366,40 @@ export default function Home() {
                   <p className="mt-1 font-bold">{project.news.titleEn}</p>
                 </div>
               )}
-              <div className="mt-4 flex flex-wrap gap-2">
-                {tones.map(([value, label]) => (
-                  <button key={value} className={`rounded-md border px-3 py-2 text-sm font-bold ${tone === value ? "border-teal-700 bg-teal-50 text-teal-900 dark:bg-teal-950 dark:text-teal-100" : "border-neutral-200 dark:border-neutral-700"}`} onClick={() => setTone(value)}>
-                    {label}
-                  </button>
-                ))}
-                <Button label="再生成" onClick={() => generateScript()} icon={<RefreshCw size={18} />} />
-              </div>
-              <div className="mt-4 grid gap-3">
-                <textarea className="min-h-[calc(100vh-330px)] rounded-lg border border-neutral-200 bg-[#fbfaf7] p-6 text-xl font-semibold leading-9 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950 sm:text-2xl sm:leading-[3.05rem]" value={project.scriptEn} onChange={(event) => setProject({ ...project, scriptEn: event.target.value })} />
-                <div className="grid gap-3 sm:grid-cols-[160px_160px_minmax(0,1fr)]">
+              <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex flex-wrap gap-2">
+                  {tones.map(([value, label]) => (
+                    <button key={value} className={`rounded-md border px-3 py-2 text-sm font-bold ${tone === value ? "border-teal-700 bg-teal-50 text-teal-900 dark:bg-teal-950 dark:text-teal-100" : "border-neutral-200 dark:border-neutral-700"}`} onClick={() => setTone(value)}>
+                      {label}
+                    </button>
+                  ))}
+                  <Button label="再生成" onClick={() => generateScript()} icon={<RefreshCw size={18} />} />
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
                   <Metric label="単語数" value={`${project.wordCount || project.scriptEn.split(/\s+/).filter(Boolean).length} words`} />
-                  <Metric label="想定尺" value={`${project.estimatedDuration || 30} sec`} />
-                  <pre className="min-h-24 whitespace-pre-wrap rounded-md bg-neutral-100 p-3 text-xs leading-5 dark:bg-neutral-800">{project.pronunciationGuide || "発音ガイドは台本生成後に表示されます。"}</pre>
+                  <Metric label="想定尺" value={`${project.estimatedDuration || 60} sec`} />
                 </div>
               </div>
-              <textarea className="mt-3 min-h-24 w-full rounded-md border border-neutral-200 bg-[#fbfaf7] p-4 text-sm leading-6 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950" value={project.scriptJa} onChange={(event) => setProject({ ...project, scriptJa: event.target.value })} />
+              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.72fr)]">
+                <div className="min-w-0">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-black uppercase text-neutral-500">English script</h3>
+                    <span className="rounded-md bg-neutral-100 px-2 py-1 text-xs font-bold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">60 sec format</span>
+                  </div>
+                  <textarea className="h-[calc(100vh-365px)] min-h-[520px] w-full rounded-lg border border-neutral-200 bg-[#fbfaf7] p-6 text-lg font-semibold leading-8 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950 sm:text-xl sm:leading-9 xl:min-h-[610px]" value={project.scriptEn} onChange={(event) => setProject({ ...project, scriptEn: event.target.value })} />
+                </div>
+                <div className="min-w-0">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-black uppercase text-neutral-500">日本語訳</h3>
+                    <span className="rounded-md bg-neutral-100 px-2 py-1 text-xs font-bold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">構成確認</span>
+                  </div>
+                  <textarea className="h-[calc(100vh-365px)] min-h-[520px] w-full rounded-lg border border-neutral-200 bg-[#fbfaf7] p-5 text-base font-semibold leading-8 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950 xl:min-h-[610px]" value={project.scriptJa} onChange={(event) => setProject({ ...project, scriptJa: event.target.value })} />
+                </div>
+              </div>
+              <div className="mt-3 rounded-md bg-neutral-100 p-3 dark:bg-neutral-800">
+                <p className="mb-2 text-xs font-black uppercase text-neutral-500">Pronunciation guide</p>
+                <pre className="whitespace-pre-wrap text-xs leading-5 text-neutral-700 dark:text-neutral-200">{project.pronunciationGuide || "発音ガイドは台本生成後に表示されます。"}</pre>
+              </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button label="ニュースに戻る" onClick={() => setView("news")} icon={<Newspaper size={18} />} />
                 <Button label="台本を保存" onClick={saveScript} icon={<Save size={18} />} strong />
