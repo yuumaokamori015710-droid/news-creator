@@ -47,5 +47,35 @@ export const mockNews: NewsItem[] = [
     videoSuitabilityScore: 88,
     selectionReason: "海外向けShortsと相性がよく、明るく安全なトーンで動画化できます。",
     createdAt: now.toISOString()
+  },
+  {
+    id: "mock-weather-jma",
+    titleJa: "気象庁、防災気象情報の確認を呼びかけ",
+    titleEn: "Japan Meteorological Agency Urges People to Check Weather Alerts",
+    summaryJa:
+      "大雨や台風の季節に向けて、気象庁は最新の防災気象情報を確認するよう呼びかけています。避難判断に関わる一次情報として重要です。",
+    category: "防災・気象",
+    sourceName: "MVP mock feed",
+    sourceUrl: "https://www.jma.go.jp/",
+    publishedAt: now.toISOString(),
+    importanceScore: 79,
+    videoSuitabilityScore: 84,
+    selectionReason: "公的機関の一次情報に近いテーマで、短い注意喚起動画にしやすい候補です。",
+    createdAt: now.toISOString()
+  },
+  {
+    id: "mock-ir-earnings",
+    titleJa: "上場企業の決算発表、海外投資家も注目",
+    titleEn: "Japanese Earnings Announcements Draw Investor Attention",
+    summaryJa:
+      "上場企業の決算発表では、業績見通しや投資計画が注目されています。日本経済の現在地を英語で説明する題材になります。",
+    category: "企業IR",
+    sourceName: "MVP mock feed",
+    sourceUrl: "https://www.jpx.co.jp/",
+    publishedAt: now.toISOString(),
+    importanceScore: 74,
+    videoSuitabilityScore: 72,
+    selectionReason: "経済ニュースとして扱いやすく、海外視聴者向けに背景説明を加えやすい候補です。",
+    createdAt: now.toISOString()
   }
 ];

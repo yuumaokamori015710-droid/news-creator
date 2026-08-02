@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { dataDir, dbPath, storage } from "./config";
 import { mockNews } from "./mockNews";
+import { collectPublicNews } from "./newsProviders";
 import type { MediaAsset, NewsItem, Project } from "./types";
 
 let db: DatabaseSync | null = null;
@@ -99,7 +100,7 @@ export function seedNews(database = openDb()) {
 
 export function listNews(): NewsItem[] {
   return openDb()
-    .prepare("SELECT * FROM news_items ORDER BY importanceScore DESC, videoSuitabilityScore DESC LIMIT 3")
+    .prepare("SELECT * FROM news_items ORDER BY createdAt DESC, importanceScore DESC, videoSuitabilityScore DESC, publishedAt DESC LIMIT 5")
     .all() as NewsItem[];
 }
 
@@ -107,9 +108,38 @@ export function getNews(id: string): NewsItem | null {
   return (openDb().prepare("SELECT * FROM news_items WHERE id = ?").get(id) as NewsItem | undefined) ?? null;
 }
 
-export function refreshNews(): NewsItem[] {
-  seedNews();
+export async function refreshNews(): Promise<NewsItem[]> {
+  const collected = await collectPublicNews().catch((error) => {
+    console.warn("Public news collection failed. Falling back to mock news.", error);
+    return [];
+  });
+  upsertNews(collected.length ? collected : mockNews);
   return listNews();
+}
+
+export function upsertNews(items: NewsItem[], database = openDb()) {
+  const insert = database.prepare(`
+    INSERT OR REPLACE INTO news_items (
+      id, titleJa, titleEn, summaryJa, category, sourceName, sourceUrl, publishedAt,
+      importanceScore, videoSuitabilityScore, selectionReason, createdAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const item of items) {
+    insert.run(
+      item.id,
+      item.titleJa,
+      item.titleEn,
+      item.summaryJa,
+      item.category,
+      item.sourceName,
+      item.sourceUrl,
+      item.publishedAt,
+      item.importanceScore,
+      item.videoSuitabilityScore,
+      item.selectionReason,
+      item.createdAt
+    );
+  }
 }
 
 export function createProject(newsId: string): Project {

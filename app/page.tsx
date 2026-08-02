@@ -309,7 +309,7 @@ export default function Home() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-bold text-neutral-500">{new Date().toLocaleDateString("ja-JP", { dateStyle: "full" })}</p>
-                <h2 className="text-2xl font-black">本日のニュース候補</h2>
+                <h2 className="text-2xl font-black">本日のニュース候補 上位5件</h2>
               </div>
               <Button label="ニュース再取得" onClick={refreshNews} icon={state === "loading" ? <Loader2 className="animate-spin" size={18} /> : <RefreshCw size={18} />} />
             </div>
@@ -350,7 +350,7 @@ export default function Home() {
               ))}
               {!news.length && (
                 <div className="rounded-lg border border-dashed border-neutral-300 p-6 text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
-                  ニュース候補を取得できていません。ニュース再取得を押してください。
+                  ニュース候補を取得できていません。ニュース再取得を押してください。外部取得に失敗した場合はモック候補へ戻ります。
                 </div>
               )}
             </div>

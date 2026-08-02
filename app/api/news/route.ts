@@ -8,5 +8,5 @@ export async function GET() {
 }
 
 export async function POST() {
-  return NextResponse.json({ news: refreshNews(), refreshedAt: new Date().toISOString() });
+  return NextResponse.json({ news: await refreshNews(), refreshedAt: new Date().toISOString() });
 }
