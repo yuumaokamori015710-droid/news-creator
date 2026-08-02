@@ -1,0 +1,13 @@
+node_modules
+.next
+.env
+data/*.db
+data/*.db-*
+storage/audio/*
+storage/assets/*
+storage/subtitles/*
+storage/videos/*
+!storage/audio/.gitkeep
+!storage/assets/.gitkeep
+!storage/subtitles/.gitkeep
+!storage/videos/.gitkeep
