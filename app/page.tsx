@@ -224,7 +224,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#f4f2ec] text-neutral-950 dark:bg-neutral-950 dark:text-neutral-50">
       <div className="sticky top-0 z-20 border-b border-neutral-200 bg-[#f4f2ec]/95 px-4 py-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mx-auto flex max-w-[96rem] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-black uppercase text-teal-700 dark:text-teal-300">Now</p>
             <h1 className="text-xl font-black sm:text-2xl">{workflow[Math.min(currentStep, workflow.length - 1)].label}</h1>
@@ -248,15 +248,15 @@ export default function Home() {
         </div>
       </div>
 
-      <section className="mx-auto grid w-full max-w-7xl gap-5 px-4 py-4 sm:px-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:px-8">
+      <section className={`mx-auto grid w-full gap-4 px-4 py-4 sm:px-6 lg:px-8 ${view === "script" ? "max-w-[112rem] lg:grid-cols-[220px_minmax(0,1fr)]" : "max-w-[96rem] lg:grid-cols-[280px_minmax(0,1fr)]"}`}>
         <aside className="lg:sticky lg:top-4 lg:self-start">
-          <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+          <div className={`rounded-lg border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900 ${view === "script" ? "p-3" : "p-4"}`}>
             <p className="text-xs font-bold uppercase text-teal-700 dark:text-teal-300">Daily workflow</p>
-            <h1 className="mt-2 text-2xl font-black leading-tight">Japan News Shorts Studio</h1>
-            <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">
-              3件から選ぶ、読む、確認する。毎日使うための制作ボードです。
+            <h1 className={`${view === "script" ? "mt-2 text-lg" : "mt-2 text-2xl"} font-black leading-tight`}>Japan News Shorts Studio</h1>
+            <p className={`${view === "script" ? "mt-2 text-xs leading-5" : "mt-2 text-sm leading-6"} text-neutral-600 dark:text-neutral-300`}>
+              5件から選ぶ、読む、確認する。毎日使うための制作ボードです。
             </p>
-            <div className="mt-5 space-y-2">
+            <div className={`${view === "script" ? "mt-3" : "mt-5"} space-y-2`}>
               {workflow.map((step, index) => (
                 <button
                   key={step.key}
@@ -274,16 +274,16 @@ export default function Home() {
                 </button>
               ))}
             </div>
-            <div className="mt-5 rounded-md bg-neutral-100 p-3 text-sm leading-6 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">
+            <div className={`${view === "script" ? "mt-3 p-2 text-xs leading-5" : "mt-5 p-3 text-sm leading-6"} rounded-md bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200`}>
               {nextAction}
             </div>
           </div>
 
-          <div className="mt-5 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+          <div className={`mt-4 rounded-lg border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900 ${view === "script" ? "p-3" : "p-4"}`}>
             <SectionTitle icon={<Video size={20} />} title="完成動画" status={project?.status} />
             {project?.videoPath ? (
               <div className="mt-4 grid gap-3">
-                <video className="mx-auto aspect-[9/16] max-h-[300px] rounded-md bg-black" src={toMediaUrl(project.videoPath) || undefined} controls />
+                <video className={`mx-auto aspect-[9/16] rounded-md bg-black ${view === "script" ? "max-h-[220px]" : "max-h-[300px]"}`} src={toMediaUrl(project.videoPath) || undefined} controls />
                 <a className="inline-flex items-center justify-center gap-2 rounded-md bg-teal-700 px-4 py-3 text-sm font-black text-white" href={toMediaUrl(project.videoPath) || "#"} download>
                   <Download size={18} />
                   MP4
@@ -296,7 +296,7 @@ export default function Home() {
                 )}
               </div>
             ) : (
-              <div className="mt-4 rounded-lg border border-dashed border-neutral-300 p-4 text-sm leading-6 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
+              <div className={`mt-4 rounded-lg border border-dashed border-neutral-300 text-sm leading-6 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300 ${view === "script" ? "p-3" : "p-4"}`}>
                 完成したらここに表示します。
               </div>
             )}
@@ -358,15 +358,15 @@ export default function Home() {
           )}
 
           {project && view === "script" && (
-            <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+            <div className="rounded-lg border border-neutral-200 bg-white p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 sm:p-4">
               <SectionTitle icon={<Sparkles size={20} />} title="台本編集" status={project.status} />
               {project.news && (
-                <div className="mt-4 rounded-lg border border-teal-100 bg-teal-50 p-4 text-sm leading-6 text-teal-950 dark:border-teal-900 dark:bg-teal-950 dark:text-teal-50">
+                <div className="mt-3 rounded-lg border border-teal-100 bg-teal-50 p-3 text-sm leading-5 text-teal-950 dark:border-teal-900 dark:bg-teal-950 dark:text-teal-50">
                   <p className="font-black">{project.news.titleJa}</p>
                   <p className="mt-1 font-bold">{project.news.titleEn}</p>
                 </div>
               )}
-              <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="mt-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <div className="flex flex-wrap gap-2">
                   {tones.map(([value, label]) => (
                     <button key={value} className={`rounded-md border px-3 py-2 text-sm font-bold ${tone === value ? "border-teal-700 bg-teal-50 text-teal-900 dark:bg-teal-950 dark:text-teal-100" : "border-neutral-200 dark:border-neutral-700"}`} onClick={() => setTone(value)}>
@@ -380,27 +380,23 @@ export default function Home() {
                   <Metric label="想定尺" value={`${project.estimatedDuration || 60} sec`} />
                 </div>
               </div>
-              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.72fr)]">
+              <div className="mt-3 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.8fr)]">
                 <div className="min-w-0">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <h3 className="text-sm font-black uppercase text-neutral-500">English script</h3>
                     <span className="rounded-md bg-neutral-100 px-2 py-1 text-xs font-bold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">60 sec format</span>
                   </div>
-                  <textarea className="h-[calc(100vh-365px)] min-h-[520px] w-full rounded-lg border border-neutral-200 bg-[#fbfaf7] p-6 text-lg font-semibold leading-8 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950 sm:text-xl sm:leading-9 xl:min-h-[610px]" value={project.scriptEn} onChange={(event) => setProject({ ...project, scriptEn: event.target.value })} />
+                  <textarea className="h-[calc(100vh-305px)] min-h-[600px] w-full rounded-lg border border-neutral-200 bg-[#fbfaf7] p-5 text-lg font-semibold leading-8 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950 sm:text-xl sm:leading-9 xl:min-h-[660px]" value={project.scriptEn} onChange={(event) => setProject({ ...project, scriptEn: event.target.value })} />
                 </div>
                 <div className="min-w-0">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <h3 className="text-sm font-black uppercase text-neutral-500">日本語訳</h3>
                     <span className="rounded-md bg-neutral-100 px-2 py-1 text-xs font-bold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">構成確認</span>
                   </div>
-                  <textarea className="h-[calc(100vh-365px)] min-h-[520px] w-full rounded-lg border border-neutral-200 bg-[#fbfaf7] p-5 text-base font-semibold leading-8 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950 xl:min-h-[610px]" value={project.scriptJa} onChange={(event) => setProject({ ...project, scriptJa: event.target.value })} />
+                  <textarea className="h-[calc(100vh-305px)] min-h-[600px] w-full rounded-lg border border-neutral-200 bg-[#fbfaf7] p-5 text-base font-semibold leading-8 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950 xl:min-h-[660px]" value={project.scriptJa} onChange={(event) => setProject({ ...project, scriptJa: event.target.value })} />
                 </div>
               </div>
-              <div className="mt-3 rounded-md bg-neutral-100 p-3 dark:bg-neutral-800">
-                <p className="mb-2 text-xs font-black uppercase text-neutral-500">Pronunciation guide</p>
-                <pre className="whitespace-pre-wrap text-xs leading-5 text-neutral-700 dark:text-neutral-200">{project.pronunciationGuide || "発音ガイドは台本生成後に表示されます。"}</pre>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <Button label="ニュースに戻る" onClick={() => setView("news")} icon={<Newspaper size={18} />} />
                 <Button label="台本を保存" onClick={saveScript} icon={<Save size={18} />} strong />
               </div>
