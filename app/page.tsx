@@ -52,7 +52,6 @@ const workflow = [
 
 export default function Home() {
   const [news, setNews] = useState<NewsItem[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [cues, setCues] = useState<SubtitleCue[]>([]);
@@ -110,7 +109,6 @@ export default function Home() {
       const newsData = await api<{ news: NewsItem[] }>("/api/news");
       setNews(newsData.news);
       const projectData = await api<{ projects: Project[] }>("/api/projects");
-      setProjects(projectData.projects);
       setProject((current) => current ?? projectData.projects[0] ?? null);
     } catch {
       setNews([]);
@@ -136,12 +134,6 @@ export default function Home() {
     setProject(data.project);
     await generateScript(data.project.id);
     setView("script");
-    await refreshHistory();
-  }
-
-  async function refreshHistory() {
-    const projectData = await api<{ projects: Project[] }>("/api/projects");
-    setProjects(projectData.projects);
   }
 
   async function generateScript(projectId = project?.id) {
@@ -170,7 +162,6 @@ export default function Home() {
     setProject(data.project);
     setMessage("台本を保存しました。");
     setView("audio");
-    await refreshHistory();
   }
 
   async function startRecording() {
@@ -202,7 +193,6 @@ export default function Home() {
     setProject(data.project);
     setMessage("音声を保存しました。");
     setView("audio");
-    await refreshHistory();
   }
 
   async function transcribe() {
@@ -212,7 +202,6 @@ export default function Home() {
     setCues(data.cues);
     setMessage("字幕タイミングを生成しました。");
     setView("video");
-    await refreshHistory();
   }
 
   async function collectAssets() {
@@ -222,7 +211,6 @@ export default function Home() {
     setAssets(data.assets);
     setMessage("背景素材を準備しました。");
     setView("video");
-    await refreshHistory();
   }
 
   async function makeVideo() {
@@ -231,7 +219,6 @@ export default function Home() {
     setProject(data.project);
     setMessage("動画を生成しました。");
     setView("video");
-    await refreshHistory();
   }
 
   return (
@@ -261,7 +248,7 @@ export default function Home() {
         </div>
       </div>
 
-      <section className="mx-auto grid w-full max-w-7xl gap-5 px-4 py-4 sm:px-6 lg:grid-cols-[280px_minmax(0,1fr)_340px] lg:px-8">
+      <section className="mx-auto grid w-full max-w-7xl gap-5 px-4 py-4 sm:px-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:px-8">
         <aside className="lg:sticky lg:top-4 lg:self-start">
           <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
             <p className="text-xs font-bold uppercase text-teal-700 dark:text-teal-300">Daily workflow</p>
@@ -290,6 +277,29 @@ export default function Home() {
             <div className="mt-5 rounded-md bg-neutral-100 p-3 text-sm leading-6 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">
               {nextAction}
             </div>
+          </div>
+
+          <div className="mt-5 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+            <SectionTitle icon={<Video size={20} />} title="完成動画" status={project?.status} />
+            {project?.videoPath ? (
+              <div className="mt-4 grid gap-3">
+                <video className="mx-auto aspect-[9/16] max-h-[300px] rounded-md bg-black" src={toMediaUrl(project.videoPath) || undefined} controls />
+                <a className="inline-flex items-center justify-center gap-2 rounded-md bg-teal-700 px-4 py-3 text-sm font-black text-white" href={toMediaUrl(project.videoPath) || "#"} download>
+                  <Download size={18} />
+                  MP4
+                </a>
+                {project.subtitlePath && (
+                  <a className="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-200 px-4 py-3 text-sm font-black dark:border-neutral-700" href={toMediaUrl(project.subtitlePath) || "#"} download>
+                    <Download size={18} />
+                    字幕
+                  </a>
+                )}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-lg border border-dashed border-neutral-300 p-4 text-sm leading-6 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
+                完成したらここに表示します。
+              </div>
+            )}
           </div>
         </aside>
 
@@ -364,9 +374,9 @@ export default function Home() {
                 ))}
                 <Button label="再生成" onClick={() => generateScript()} icon={<RefreshCw size={18} />} />
               </div>
-              <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
-                <textarea className="min-h-[440px] rounded-lg border border-neutral-200 bg-[#fbfaf7] p-5 text-xl font-semibold leading-10 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950 sm:text-2xl sm:leading-[3.1rem]" value={project.scriptEn} onChange={(event) => setProject({ ...project, scriptEn: event.target.value })} />
-                <div className="grid gap-3">
+              <div className="mt-4 grid gap-3">
+                <textarea className="min-h-[calc(100vh-330px)] rounded-lg border border-neutral-200 bg-[#fbfaf7] p-6 text-xl font-semibold leading-9 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950 sm:text-2xl sm:leading-[3.05rem]" value={project.scriptEn} onChange={(event) => setProject({ ...project, scriptEn: event.target.value })} />
+                <div className="grid gap-3 sm:grid-cols-[160px_160px_minmax(0,1fr)]">
                   <Metric label="単語数" value={`${project.wordCount || project.scriptEn.split(/\s+/).filter(Boolean).length} words`} />
                   <Metric label="想定尺" value={`${project.estimatedDuration || 30} sec`} />
                   <pre className="min-h-24 whitespace-pre-wrap rounded-md bg-neutral-100 p-3 text-xs leading-5 dark:bg-neutral-800">{project.pronunciationGuide || "発音ガイドは台本生成後に表示されます。"}</pre>
@@ -440,44 +450,6 @@ export default function Home() {
             </div>
           )}
         </section>
-
-        <aside className="space-y-5 lg:sticky lg:top-4 lg:self-start">
-          <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-            <SectionTitle icon={<Video size={20} />} title="完成動画" status={project?.status} />
-            {project?.videoPath ? (
-              <div className="mt-4 grid gap-3">
-                <video className="mx-auto aspect-[9/16] max-h-[520px] rounded-md bg-black" src={toMediaUrl(project.videoPath) || undefined} controls />
-                <a className="inline-flex items-center justify-center gap-2 rounded-md bg-teal-700 px-4 py-3 text-sm font-black text-white" href={toMediaUrl(project.videoPath) || "#"} download>
-                  <Download size={18} />
-                  MP4ダウンロード
-                </a>
-                {project.subtitlePath && (
-                  <a className="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-200 px-4 py-3 text-sm font-black dark:border-neutral-700" href={toMediaUrl(project.subtitlePath) || "#"} download>
-                    <Download size={18} />
-                    字幕ファイル
-                  </a>
-                )}
-              </div>
-            ) : (
-              <div className="mt-4 rounded-lg border border-dashed border-neutral-300 p-5 text-sm leading-6 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
-                ここに完成動画が表示されます。FFmpeg未導入の場合は動画生成時にエラーが出ます。
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-            <h2 className="text-lg font-black">履歴</h2>
-            <div className="mt-3 space-y-2">
-              {projects.map((item) => (
-                <button key={item.id} className="w-full rounded-md border border-neutral-200 bg-[#fbfaf7] p-3 text-left text-sm hover:border-teal-700 dark:border-neutral-800 dark:bg-neutral-950" onClick={() => setProject(item)}>
-                  <span className="line-clamp-2 font-black">{item.news?.titleEn || item.shortsTitle || item.id}</span>
-                  <span className="mt-1 block text-xs text-neutral-500">{statusLabel[item.status] || item.status}</span>
-                </button>
-              ))}
-              {!projects.length && <p className="text-sm text-neutral-500">まだ履歴はありません。</p>}
-            </div>
-          </div>
-        </aside>
       </section>
     </main>
   );
