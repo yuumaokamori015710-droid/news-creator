@@ -8,6 +8,7 @@ type RawNews = {
   sourceName: string;
   category?: string;
   summary?: string;
+  articleText?: string;
 };
 
 const FEEDS = {
@@ -33,7 +34,8 @@ export async function collectPublicNews(): Promise<NewsItem[]> {
     ])
   ).flatMap((result) => (result.status === "fulfilled" ? result.value : []));
 
-  return pickBalancedTopFive(rankAndNormalize(dedupe(raw)));
+  const enriched = await enrichWithArticleText(dedupe(raw).slice(0, 30));
+  return pickBalancedTopFive(rankAndNormalize(enriched));
 }
 
 async function collectRssFeeds(urls: string[], sourceName: string): Promise<RawNews[]> {
@@ -102,6 +104,26 @@ async function fetchText(url: string) {
   }
 }
 
+async function enrichWithArticleText(items: RawNews[]) {
+  const settled = await Promise.allSettled(
+    items.map(async (item) => {
+      const articleText = await fetchArticleText(item.url).catch(() => "");
+      return {
+        ...item,
+        articleText,
+        summary: summarizeArticleJa(item, articleText)
+      };
+    })
+  );
+  return settled.map((result, index) => (result.status === "fulfilled" ? result.value : items[index]));
+}
+
+async function fetchArticleText(url: string) {
+  if (/\.pdf(?:$|\?)/i.test(url)) return "";
+  const html = await fetchText(url);
+  return extractReadableText(html);
+}
+
 function parseRss(xml: string): RawNews[] {
   return [...xml.matchAll(/<item\b[\s\S]*?<\/item>/g)].map((match) => {
     const itemXml = match[0];
@@ -136,15 +158,15 @@ function rankAndNormalize(items: RawNews[]): NewsItem[] {
       return {
         id: stableId(item.sourceName, item.url || item.title),
         titleJa: item.title,
-        titleEn: makeTitleEn(item.title, item.sourceName),
-        summaryJa: item.summary || `${item.sourceName}の公開情報です。記事本文は保存せず、出典リンクを確認して台本化します。`,
+        titleEn: makeTitleEn(item),
+        summaryJa: item.summary || `${item.sourceName}の公開情報です。記事本文の取得に失敗したため、一覧情報と出典リンクをもとに台本化します。`,
         category,
         sourceName: item.sourceName,
         sourceUrl: item.url,
         publishedAt,
         importanceScore,
         videoSuitabilityScore,
-        selectionReason: makeSelectionReason(item.sourceName, category, importanceScore, videoSuitabilityScore),
+        selectionReason: makeSelectionReason(item, category, importanceScore, videoSuitabilityScore),
         createdAt: now
       } satisfies NewsItem;
     })
@@ -203,7 +225,8 @@ function scoreImportance(title: string, sourceName: string, category: string) {
   if (sourceName.includes("日銀") || sourceName.includes("気象庁")) score += 12;
   if (sourceName.includes("TDnet")) score += 7;
   if (/地震|津波|大雨|台風|警報|死亡|事故|逮捕|首相|日銀|金利|物価|円/.test(title)) score += 12;
-  if (category === "経済" || category === "防災・気象") score += 5;
+  if (category === "経済" || category === "企業IR") score += 10;
+  if (category === "防災・気象") score += 2;
   return clamp(score, 45, 98);
 }
 
@@ -216,12 +239,108 @@ function scoreVideoSuitability(title: string, category: string) {
   return clamp(score, 45, 95);
 }
 
-function makeTitleEn(title: string, sourceName: string) {
-  return `Japan update from ${sourceName}: ${title}`.slice(0, 120);
+function summarizeArticleJa(item: RawNews, articleText: string) {
+  const baseText = normalizeWhitespace([item.title, item.summary, articleText].filter(Boolean).join("。"));
+  const sentences = splitJapaneseSentences(baseText)
+    .filter((sentence) => sentence.length >= 18 && sentence.length <= 180)
+    .filter((sentence) => !/(関連記事|動画|シェア|リンク|このページ|Copyright|JavaScript|閉じる|JUST IN|ニュースランキング|アクセスランキング)/i.test(sentence));
+  const relevantSentences = sentences.filter((sentence) => isRelevantSentence(sentence, item));
+  const sourceSentences = relevantSentences.length ? relevantSentences : sentences;
+  const numericSentences = sourceSentences.filter((sentence) => extractQuantitativeHighlights(sentence).length > 0);
+  const picked = uniqueByText([...numericSentences.slice(0, 2), ...sourceSentences.slice(0, 4), ...sentences.slice(0, 2)]).slice(0, 4);
+  const summaryText = picked.join("");
+  const highlights = extractQuantitativeHighlights(summaryText || baseText).slice(0, 5);
+
+  if (!picked.length) {
+    return `${item.summary || `${item.sourceName}の公開情報です。`} 記事本文から十分な本文を抽出できませんでした。具体的な数字: ${highlights.length ? highlights.join("、") : "記事内で確認できる主要数値は限定的です。"}`;
+  }
+
+  return [
+    `記事本文要約: ${picked.join("")}`,
+    `具体的な数字: ${highlights.length ? highlights.join("、") : "記事内で確認できる主要数値は限定的です。"}`,
+    `確認ポイント: ${makeJapaneseWatchPoint(item, picked.join(""))}`
+  ].join(" ");
 }
 
-function makeSelectionReason(sourceName: string, category: string, importanceScore: number, videoSuitabilityScore: number) {
-  return `${sourceName}の公開情報です。${category}カテゴリで、重要度${importanceScore}・動画化しやすさ${videoSuitabilityScore}として候補化しました。`;
+function extractReadableText(html: string) {
+  const jsonBodies = [...html.matchAll(/"articleBody"\s*:\s*"((?:\\.|[^"\\])*)"/g)]
+    .map((match) => unescapeJsonString(match[1]));
+  const metaDescriptions = [...html.matchAll(/<meta[^>]+(?:name|property)=["'](?:description|og:description)["'][^>]+content=["']([^"']+)["']/gi)]
+    .map((match) => decodeHtml(match[1]));
+  const scopedHtml = html.match(/<article[\s\S]*?<\/article>/i)?.[0] || html.match(/<main[\s\S]*?<\/main>/i)?.[0] || html;
+  const stripped = decodeHtml(
+    scopedHtml
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+      .replace(/<header[\s\S]*?<\/header>/gi, " ")
+      .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
+      .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+      .replace(/<br\s*\/?>/gi, "。")
+      .replace(/<\/p>|<\/li>|<\/h[1-6]>/gi, "。")
+      .replace(/<[^>]*>/g, " ")
+  );
+  return normalizeWhitespace([...jsonBodies, ...metaDescriptions, stripped].filter(Boolean).join("。"));
+}
+
+function splitJapaneseSentences(text: string) {
+  return normalizeWhitespace(text)
+    .split(/(?<=[。！？])\s*/)
+    .map((sentence) => sentence.replace(/^\d+\s*\/\s*\d+\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function extractQuantitativeHighlights(text: string) {
+  const patterns = [
+    /震度\s*\d+/g,
+    /台風\s*\d+\s*号/g,
+    /\d+(?:\.\d+)?\s*(?:兆円|億円|万円|円|ドル|％|%|ポイント|pt|万人|人|件|社|度|メートル|キロ|回|倍)/g,
+    /\d+(?:\.\d+)?\s*(?:円|ドル|％|%|ポイント|pt)?\s*(?:→|から|より|〜|～|-)\s*\d+(?:\.\d+)?\s*(?:円|ドル|％|%|ポイント|pt)?/g
+  ];
+  return uniqueByText(patterns.flatMap((pattern) => text.match(pattern) ?? []))
+    .filter((value) => !/^\d{4}年$|^\d{1,2}月$|^\d{1,2}日$/.test(value))
+    .slice(0, 8);
+}
+
+function makeJapaneseWatchPoint(item: RawNews, text: string) {
+  const combined = `${item.title} ${item.category} ${text}`;
+  if (/円|為替|ドル/.test(combined)) return "為替水準、輸出企業の採算、輸入物価、政府・日銀のけん制発言。";
+  if (/日銀|金利|物価|賃金/.test(combined)) return "日銀の政策期待、長期金利、銀行株、グロース株への逆風。";
+  if (/決算|業績|上方|下方|配当|自社株/.test(combined)) return "企業業績の上振れ・下振れ、海外投資家の日本株需給。";
+  if (/AI|半導体|ロボット|技術/.test(combined)) return "半導体関連、設備投資、AIテーマ株への波及。";
+  if (/観光|訪日|旅行|ホテル/.test(combined)) return "小売、鉄道、ホテル、外食などインバウンド関連消費。";
+  if (/気象|台風|大雨|地震|災害/.test(combined)) return "物流、工場稼働、保険、消費マインドへの短期影響。";
+  return "日本企業決算、ドル円、海外投資家需給、日経平均の方向感。";
+}
+
+function isRelevantSentence(sentence: string, item: RawNews) {
+  const titleWords = item.title.match(/[一-龥ぁ-んァ-ヶA-Za-z0-9]{2,}/g) ?? [];
+  if (titleWords.some((word) => sentence.includes(word))) return true;
+  const combined = `${item.title} ${item.category}`;
+  if (/円|為替|ドル/.test(combined)) return /円|為替|ドル|介入|日銀|財務省/.test(sentence);
+  if (/地震|台風|気象|災害|大雨|警報/.test(combined)) return /地震|台風|気象|災害|大雨|警報|震度|津波|気温|避難/.test(sentence);
+  if (/決算|業績|配当|自社株/.test(combined)) return /決算|業績|配当|自社株|売上|利益|投資/.test(sentence);
+  if (/観光|訪日|旅行/.test(combined)) return /観光|訪日|旅行|宿泊|消費|地域|ホテル/.test(sentence);
+  return false;
+}
+
+function makeTitleEn(item: RawNews) {
+  const text = `${item.category} ${item.title} ${item.summary}`;
+  if (/円|為替|ドル/.test(text)) return "Yen Moves Put Japanese Stocks and Households in Focus";
+  if (/日銀|金利|物価|賃金/.test(text)) return "Bank of Japan Watch Moves Back Into Focus";
+  if (/決算|業績|上方|下方|配当|自社株/.test(text)) return "Japanese Earnings Put Investors on Alert";
+  if (/AI|半導体/.test(text)) return "Japan Tech News Links Back to the AI and Chip Trade";
+  if (/ロボット|介護/.test(text)) return "Japan Tests Robots Against a Real Labor Shortage";
+  if (/観光|訪日|旅行|ホテル/.test(text)) return "Inbound Tourism Keeps Spreading Across Japan";
+  if (/気象|台風|大雨|地震|災害/.test(text)) return "Japan Weather Alerts Raise Economic Disruption Risk";
+  if (/政治|政府|首相|国会/.test(text)) return "Japan Politics Adds a New Policy Risk";
+  return `Japan News Update from ${item.sourceName}`;
+}
+
+function makeSelectionReason(item: RawNews, category: string, importanceScore: number, videoSuitabilityScore: number) {
+  const bodyStatus = item.articleText ? "記事本文を取得して要約済み" : "一覧情報中心";
+  const numbers = extractQuantitativeHighlights(`${item.title} ${item.summary || ""}`).slice(0, 3);
+  return `${item.sourceName}の公開情報です。${bodyStatus}。${category}カテゴリで、重要度${importanceScore}・動画化しやすさ${videoSuitabilityScore}として候補化しました。${numbers.length ? `主な数字: ${numbers.join("、")}。` : ""}`;
 }
 
 function stableId(sourceName: string, value: string) {
@@ -240,6 +359,20 @@ function stripTags(value: string) {
   return value.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
 }
 
+function normalizeWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").replace(/。+/g, "。").trim();
+}
+
+function uniqueByText(values: string[]) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = value.replace(/\s+/g, "");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function decodeHtml(value: string) {
   return value
     .replace(/&amp;/g, "&")
@@ -248,6 +381,14 @@ function decodeHtml(value: string) {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, " ");
+}
+
+function unescapeJsonString(value: string) {
+  try {
+    return JSON.parse(`"${value}"`) as string;
+  } catch {
+    return value.replace(/\\"/g, '"').replace(/\\n/g, " ");
+  }
 }
 
 function clamp(value: number, min: number, max: number) {
