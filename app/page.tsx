@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertCircle,
   Check,
+  ChevronRight,
   Download,
   FileAudio,
   Loader2,
@@ -18,7 +20,26 @@ import type { MediaAsset, NewsItem, Project, SubtitleCue } from "@/lib/types";
 
 type ApiState = "idle" | "loading" | "error";
 
-const steps = ["News", "Script", "Audio", "Subtitles", "Video"];
+const statusLabel: Record<string, string> = {
+  NEWS_SELECTED: "ニュース選択済み",
+  SCRIPT_GENERATED: "台本生成済み",
+  SCRIPT_APPROVED: "台本保存済み",
+  AUDIO_UPLOADED: "音声保存済み",
+  TRANSCRIBED: "字幕生成済み",
+  ASSETS_COLLECTED: "素材準備済み",
+  VIDEO_PROCESSING: "動画生成中",
+  VIDEO_COMPLETED: "完成",
+  VIDEO_FAILED: "失敗",
+  PUBLISHED: "投稿済み"
+};
+
+const tones = [
+  ["simple", "簡単"],
+  ["natural", "自然"],
+  ["shorter", "短く"],
+  ["impact", "強め"],
+  ["objective", "客観"]
+];
 
 export default function Home() {
   const [news, setNews] = useState<NewsItem[]>([]);
@@ -38,23 +59,24 @@ export default function Home() {
     void load();
   }, []);
 
-  const activeStep = useMemo(() => {
+  const currentStep = useMemo(() => {
     if (!project) return 0;
-    if (project.status === "NEWS_SELECTED") return 1;
+    if (["NEWS_SELECTED"].includes(project.status)) return 1;
     if (["SCRIPT_GENERATED", "SCRIPT_APPROVED"].includes(project.status)) return 2;
-    if (project.status === "AUDIO_UPLOADED") return 3;
+    if (["AUDIO_UPLOADED"].includes(project.status)) return 3;
     if (["TRANSCRIBED", "ASSETS_COLLECTED", "VIDEO_PROCESSING", "VIDEO_FAILED"].includes(project.status)) return 4;
-    return 4;
+    return 5;
   }, [project]);
 
   async function api<T>(url: string, init?: RequestInit): Promise<T> {
     setState("loading");
     setMessage("");
     const response = await fetch(url, init);
-    const json = await response.json();
+    const text = await response.text();
+    const json = text ? JSON.parse(text) : {};
     if (!response.ok) {
       setState("error");
-      setMessage(json.error || "処理に失敗しました。");
+      setMessage(json.error || "処理に失敗しました。ページを更新してもう一度試してください。");
       throw new Error(json.error || "Request failed");
     }
     setState("idle");
@@ -62,19 +84,25 @@ export default function Home() {
   }
 
   async function load() {
-    const [newsData, projectData] = await Promise.all([
-      api<{ news: NewsItem[] }>("/api/news"),
-      api<{ projects: Project[] }>("/api/projects")
-    ]);
-    setNews(newsData.news);
-    setProjects(projectData.projects);
-    setProject(projectData.projects[0] ?? null);
+    try {
+      const newsData = await api<{ news: NewsItem[] }>("/api/news");
+      setNews(newsData.news);
+      const projectData = await api<{ projects: Project[] }>("/api/projects");
+      setProjects(projectData.projects);
+      setProject((current) => current ?? projectData.projects[0] ?? null);
+    } catch {
+      setNews([]);
+    }
   }
 
   async function refreshNews() {
-    const data = await api<{ news: NewsItem[] }>("/api/news", { method: "POST" });
-    setNews(data.news);
-    setMessage("ニュース候補を更新しました。");
+    try {
+      const data = await api<{ news: NewsItem[] }>("/api/news", { method: "POST" });
+      setNews(data.news);
+      setMessage("ニュース候補を更新しました。");
+    } catch {
+      setNews([]);
+    }
   }
 
   async function selectNews(newsId: string) {
@@ -85,7 +113,12 @@ export default function Home() {
     });
     setProject(data.project);
     await generateScript(data.project.id);
-    await load();
+    await refreshHistory();
+  }
+
+  async function refreshHistory() {
+    const projectData = await api<{ projects: Project[] }>("/api/projects");
+    setProjects(projectData.projects);
   }
 
   async function generateScript(projectId = project?.id) {
@@ -113,6 +146,7 @@ export default function Home() {
     });
     setProject(data.project);
     setMessage("台本を保存しました。");
+    await refreshHistory();
   }
 
   async function startRecording() {
@@ -143,6 +177,7 @@ export default function Home() {
     const data = await api<{ project: Project }>(`/api/projects/${project.id}/audio`, { method: "POST", body: form });
     setProject(data.project);
     setMessage("音声を保存しました。");
+    await refreshHistory();
   }
 
   async function transcribe() {
@@ -151,6 +186,7 @@ export default function Home() {
     setProject(data.project);
     setCues(data.cues);
     setMessage("字幕タイミングを生成しました。");
+    await refreshHistory();
   }
 
   async function collectAssets() {
@@ -159,6 +195,7 @@ export default function Home() {
     setProject(data.project);
     setAssets(data.assets);
     setMessage("背景素材を準備しました。");
+    await refreshHistory();
   }
 
   async function makeVideo() {
@@ -166,206 +203,205 @@ export default function Home() {
     const data = await api<{ project: Project }>(`/api/projects/${project.id}/video`, { method: "POST" });
     setProject(data.project);
     setMessage("動画を生成しました。");
-    await load();
+    await refreshHistory();
   }
 
   return (
-    <main className="min-h-screen">
-      <section className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-4 border-b border-line pb-5 dark:border-neutral-700">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-action">Japan News Shorts Studio</p>
-              <h1 className="mt-1 text-3xl font-bold tracking-normal sm:text-4xl">今日の日本ニュースを30秒英語Shortsへ</h1>
+    <main className="min-h-screen bg-[#f4f2ec] text-neutral-950 dark:bg-neutral-950 dark:text-neutral-50">
+      <section className="mx-auto grid w-full max-w-7xl gap-5 px-4 py-4 sm:px-6 lg:grid-cols-[280px_minmax(0,1fr)_340px] lg:px-8">
+        <aside className="lg:sticky lg:top-4 lg:self-start">
+          <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+            <p className="text-xs font-bold uppercase text-teal-700 dark:text-teal-300">Daily workflow</p>
+            <h1 className="mt-2 text-2xl font-black leading-tight">Japan News Shorts Studio</h1>
+            <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">
+              3件から選ぶ、読む、確認する。毎日使うための制作ボードです。
+            </p>
+            <div className="mt-5 space-y-2">
+              {["ニュース選択", "台本", "音声", "字幕・素材", "動画確認"].map((label, index) => (
+                <div key={label} className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm ${index <= currentStep ? "bg-teal-50 text-teal-900 dark:bg-teal-950 dark:text-teal-100" : "text-neutral-500"}`}>
+                  <span className={`grid h-6 w-6 place-items-center rounded-full text-xs font-bold ${index <= currentStep ? "bg-teal-700 text-white" : "bg-neutral-200 dark:bg-neutral-800"}`}>
+                    {index + 1}
+                  </span>
+                  <span className="font-bold">{label}</span>
+                </div>
+              ))}
             </div>
-            <div className="text-sm text-neutral-600 dark:text-neutral-300">{new Date().toLocaleDateString("ja-JP", { dateStyle: "full" })}</div>
           </div>
-          <div className="flex items-center gap-2" aria-label="制作ステップ">
-            {steps.map((step, index) => (
-              <div key={step} className="flex items-center gap-2">
-                <span className={`step-dot ${index <= activeStep ? "active" : ""}`} />
-                <span className="hidden text-xs font-semibold sm:inline">{step}</span>
+        </aside>
+
+        <section className="space-y-5">
+          <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-bold text-neutral-500">{new Date().toLocaleDateString("ja-JP", { dateStyle: "full" })}</p>
+                <h2 className="text-2xl font-black">本日のニュース候補</h2>
               </div>
-            ))}
-          </div>
-        </header>
+              <Button label="ニュース再取得" onClick={refreshNews} icon={state === "loading" ? <Loader2 className="animate-spin" size={18} /> : <RefreshCw size={18} />} />
+            </div>
 
-        {message && (
-          <div className={`rounded-md border px-4 py-3 text-sm ${state === "error" ? "border-amber-300 bg-amber-50 text-amber-900" : "border-teal-200 bg-teal-50 text-teal-900"}`}>
-            {message}
-          </div>
-        )}
+            {message && (
+              <div className={`mt-4 flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${state === "error" ? "border-amber-300 bg-amber-50 text-amber-900" : "border-teal-200 bg-teal-50 text-teal-900"}`}>
+                {state === "error" && <AlertCircle className="mt-0.5 shrink-0" size={16} />}
+                <span>{message}</span>
+              </div>
+            )}
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,.75fr)]">
-          <section className="flex flex-col gap-6">
-            <Panel title="1. ニュース候補" icon={<Newspaper size={20} />} action={<IconButton label="ニュース再取得" onClick={refreshNews} icon={<RefreshCw size={18} />} />}>
-              <div className="grid gap-3">
-                {news.map((item) => (
-                  <article key={item.id} className="rounded-md border border-line bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
-                    <div className="flex flex-col gap-3">
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="rounded bg-neutral-100 px-2 py-1 font-semibold dark:bg-neutral-800">{item.category}</span>
+            <div className="mt-4 grid gap-3">
+              {news.map((item, index) => (
+                <article key={item.id} className="rounded-lg border border-neutral-200 bg-[#fbfaf7] p-4 dark:border-neutral-800 dark:bg-neutral-950">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-neutral-950 text-sm font-black text-white dark:bg-white dark:text-neutral-950">{index + 1}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+                        <span className="rounded-md bg-teal-100 px-2 py-1 font-bold text-teal-900 dark:bg-teal-950 dark:text-teal-100">{item.category}</span>
                         <span>{item.sourceName}</span>
                         <span>{new Date(item.publishedAt).toLocaleString("ja-JP")}</span>
                       </div>
-                      <div>
-                        <h2 className="text-lg font-bold">{item.titleJa}</h2>
-                        <p className="mt-1 text-sm font-semibold text-action">{item.titleEn}</p>
-                      </div>
-                      <p className="text-sm leading-6 text-neutral-700 dark:text-neutral-300">{item.summaryJa}</p>
-                      <div className="grid gap-2 text-sm sm:grid-cols-3">
+                      <h3 className="mt-2 text-lg font-black leading-snug">{item.titleJa}</h3>
+                      <p className="mt-1 text-sm font-bold text-teal-700 dark:text-teal-300">{item.titleEn}</p>
+                      <p className="mt-3 text-sm leading-6 text-neutral-700 dark:text-neutral-300">{item.summaryJa}</p>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                         <Score label="重要度" value={item.importanceScore} />
                         <Score label="動画化" value={item.videoSuitabilityScore} />
-                        <div className="text-xs text-neutral-600 dark:text-neutral-300">{item.selectionReason}</div>
+                        <button className="inline-flex items-center justify-center gap-2 rounded-md bg-teal-700 px-4 py-3 text-sm font-black text-white hover:bg-teal-800" onClick={() => selectNews(item.id)}>
+                          これで作る
+                          <ChevronRight size={18} />
+                        </button>
                       </div>
-                      <button className="rounded-md bg-action px-4 py-3 text-sm font-bold text-white" onClick={() => selectNews(item.id)}>
-                        このニュースで作る
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </Panel>
-
-            {project && (
-              <Panel title="2. 台本編集" icon={<Sparkles size={20} />}>
-                <div className="grid gap-4">
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      ["simple", "簡単"],
-                      ["natural", "自然"],
-                      ["shorter", "短く"],
-                      ["impact", "強め"],
-                      ["objective", "客観"]
-                    ].map(([value, label]) => (
-                      <button key={value} className={`rounded-md border px-3 py-2 text-sm ${tone === value ? "border-action bg-teal-50 text-action" : "border-line"}`} onClick={() => setTone(value)}>
-                        {label}
-                      </button>
-                    ))}
-                    <IconButton label="再生成" onClick={() => generateScript()} icon={<RefreshCw size={18} />} />
-                  </div>
-                  <textarea className="min-h-44 rounded-md border border-line bg-white p-3 leading-7 dark:border-neutral-700 dark:bg-neutral-900" value={project.scriptEn} onChange={(event) => setProject({ ...project, scriptEn: event.target.value })} />
-                  <textarea className="min-h-28 rounded-md border border-line bg-white p-3 leading-7 dark:border-neutral-700 dark:bg-neutral-900" value={project.scriptJa} onChange={(event) => setProject({ ...project, scriptJa: event.target.value })} />
-                  <div className="grid gap-3 text-sm sm:grid-cols-3">
-                    <Metric label="単語数" value={`${project.wordCount || project.scriptEn.split(/\s+/).filter(Boolean).length} words`} />
-                    <Metric label="想定尺" value={`${project.estimatedDuration || 30} sec`} />
-                    <Metric label="ステータス" value={project.status} />
-                  </div>
-                  <pre className="whitespace-pre-wrap rounded-md bg-neutral-100 p-3 text-sm dark:bg-neutral-800">{project.pronunciationGuide || "発音ガイドは台本生成後に表示されます。"}</pre>
-                  <IconButton label="台本を保存" onClick={saveScript} icon={<Save size={18} />} strong />
-                </div>
-              </Panel>
-            )}
-
-            {project && (
-              <Panel title="3. 音声" icon={<Mic size={20} />}>
-                <div className="grid gap-4">
-                  <div className="flex flex-wrap gap-2">
-                    {!recording ? (
-                      <IconButton label="録音開始" onClick={startRecording} icon={<Mic size={18} />} strong />
-                    ) : (
-                      <IconButton label="録音停止" onClick={stopRecording} icon={<Check size={18} />} strong />
-                    )}
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-line bg-white px-4 py-3 text-sm font-bold dark:border-neutral-700 dark:bg-neutral-900">
-                      <Upload size={18} />
-                      音声アップロード
-                      <input className="sr-only" type="file" accept="audio/*" onChange={(event) => event.target.files?.[0] && uploadAudio(event.target.files[0])} />
-                    </label>
-                  </div>
-                  {(audioPreview || project.audioPath) && <audio controls className="w-full" src={audioPreview || toMediaUrl(project.audioPath) || undefined} />}
-                  <IconButton label="文字起こしと字幕生成" onClick={transcribe} icon={<FileAudio size={18} />} />
-                </div>
-              </Panel>
-            )}
-
-            {project && (
-              <Panel title="4. 動画生成" icon={<Video size={20} />}>
-                <div className="grid gap-4">
-                  <div className="flex flex-wrap gap-2">
-                    <IconButton label="背景素材を準備" onClick={collectAssets} icon={<Sparkles size={18} />} />
-                    <IconButton label="動画生成" onClick={makeVideo} icon={state === "loading" ? <Loader2 className="animate-spin" size={18} /> : <Video size={18} />} strong />
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-md border border-line p-3 dark:border-neutral-700">
-                      <h3 className="text-sm font-bold">字幕プレビュー</h3>
-                      <div className="mt-2 space-y-2 text-sm text-neutral-700 dark:text-neutral-300">
-                        {(cues.length ? cues : []).slice(0, 8).map((cue) => (
-                          <p key={cue.index}>{cue.text}</p>
-                        ))}
-                        {!cues.length && <p>文字起こし後に字幕が表示されます。</p>}
-                      </div>
-                    </div>
-                    <div className="rounded-md border border-line p-3 dark:border-neutral-700">
-                      <h3 className="text-sm font-bold">背景素材</h3>
-                      <div className="mt-2 space-y-2 text-sm">
-                        {(assets.length ? assets : []).map((asset) => (
-                          <p key={asset.id}>{asset.source} / {asset.license}</p>
-                        ))}
-                        {!assets.length && <p className="text-neutral-600 dark:text-neutral-300">未準備。見つからない場合は汎用背景にフォールバックします。</p>}
-                      </div>
+                      <p className="mt-3 text-xs leading-5 text-neutral-500">{item.selectionReason}</p>
                     </div>
                   </div>
-                </div>
-              </Panel>
-            )}
-          </section>
-
-          <aside className="flex flex-col gap-6">
-            <Panel title="完成動画" icon={<Video size={20} />}>
-              {project?.videoPath ? (
-                <div className="grid gap-3">
-                  <video className="mx-auto aspect-[9/16] max-h-[640px] rounded-md bg-black" src={toMediaUrl(project.videoPath) || undefined} controls />
-                  <a className="inline-flex items-center justify-center gap-2 rounded-md bg-action px-4 py-3 text-sm font-bold text-white" href={toMediaUrl(project.videoPath) || "#"} download>
-                    <Download size={18} />
-                    MP4ダウンロード
-                  </a>
-                  {project.subtitlePath && (
-                    <a className="inline-flex items-center justify-center gap-2 rounded-md border border-line px-4 py-3 text-sm font-bold" href={toMediaUrl(project.subtitlePath) || "#"} download>
-                      <Download size={18} />
-                      字幕ファイル
-                    </a>
-                  )}
-                </div>
-              ) : (
-                <div className="rounded-md border border-dashed border-line p-6 text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
-                  生成後、ここに縦型プレビューが表示されます。
+                </article>
+              ))}
+              {!news.length && (
+                <div className="rounded-lg border border-dashed border-neutral-300 p-6 text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
+                  ニュース候補を取得できていません。ニュース再取得を押してください。
                 </div>
               )}
-            </Panel>
+            </div>
+          </div>
 
-            <Panel title="過去の動画" icon={<Check size={20} />}>
-              <div className="space-y-3">
-                {projects.map((item) => (
-                  <button key={item.id} className="w-full rounded-md border border-line bg-white p-3 text-left text-sm dark:border-neutral-700 dark:bg-neutral-900" onClick={() => setProject(item)}>
-                    <span className="block font-bold">{item.news?.titleEn || item.shortsTitle || item.id}</span>
-                    <span className="mt-1 block text-xs text-neutral-600 dark:text-neutral-300">{item.status} / {new Date(item.updatedAt).toLocaleString("ja-JP")}</span>
+          {project && (
+            <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+              <SectionTitle icon={<Sparkles size={20} />} title="台本編集" status={project.status} />
+              <div className="mt-4 flex flex-wrap gap-2">
+                {tones.map(([value, label]) => (
+                  <button key={value} className={`rounded-md border px-3 py-2 text-sm font-bold ${tone === value ? "border-teal-700 bg-teal-50 text-teal-900 dark:bg-teal-950 dark:text-teal-100" : "border-neutral-200 dark:border-neutral-700"}`} onClick={() => setTone(value)}>
+                    {label}
                   </button>
                 ))}
-                {!projects.length && <p className="text-sm text-neutral-600 dark:text-neutral-300">まだ履歴はありません。</p>}
+                <Button label="再生成" onClick={() => generateScript()} icon={<RefreshCw size={18} />} />
               </div>
-            </Panel>
-          </aside>
-        </div>
+              <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
+                <textarea className="min-h-52 rounded-md border border-neutral-200 bg-[#fbfaf7] p-4 text-base leading-7 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950" value={project.scriptEn} onChange={(event) => setProject({ ...project, scriptEn: event.target.value })} />
+                <div className="grid gap-3">
+                  <Metric label="単語数" value={`${project.wordCount || project.scriptEn.split(/\s+/).filter(Boolean).length} words`} />
+                  <Metric label="想定尺" value={`${project.estimatedDuration || 30} sec`} />
+                  <pre className="min-h-24 whitespace-pre-wrap rounded-md bg-neutral-100 p-3 text-xs leading-5 dark:bg-neutral-800">{project.pronunciationGuide || "発音ガイドは台本生成後に表示されます。"}</pre>
+                </div>
+              </div>
+              <textarea className="mt-3 min-h-24 w-full rounded-md border border-neutral-200 bg-[#fbfaf7] p-4 text-sm leading-6 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950" value={project.scriptJa} onChange={(event) => setProject({ ...project, scriptJa: event.target.value })} />
+              <div className="mt-4">
+                <Button label="台本を保存" onClick={saveScript} icon={<Save size={18} />} strong />
+              </div>
+            </div>
+          )}
+
+          {project && (
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+                <SectionTitle icon={<Mic size={20} />} title="音声" status={project.status} />
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {!recording ? (
+                    <Button label="録音開始" onClick={startRecording} icon={<Mic size={18} />} strong />
+                  ) : (
+                    <Button label="録音停止" onClick={stopRecording} icon={<Check size={18} />} strong />
+                  )}
+                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-neutral-200 bg-white px-4 py-3 text-sm font-black dark:border-neutral-700 dark:bg-neutral-950">
+                    <Upload size={18} />
+                    アップロード
+                    <input className="sr-only" type="file" accept="audio/*" onChange={(event) => event.target.files?.[0] && uploadAudio(event.target.files[0])} />
+                  </label>
+                </div>
+                {(audioPreview || project.audioPath) && <audio controls className="mt-4 w-full" src={audioPreview || toMediaUrl(project.audioPath) || undefined} />}
+                <div className="mt-4">
+                  <Button label="文字起こしと字幕生成" onClick={transcribe} icon={<FileAudio size={18} />} />
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+                <SectionTitle icon={<Video size={20} />} title="字幕・素材・動画" status={project.status} />
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button label="背景素材を準備" onClick={collectAssets} icon={<Sparkles size={18} />} />
+                  <Button label="動画生成" onClick={makeVideo} icon={state === "loading" ? <Loader2 className="animate-spin" size={18} /> : <Video size={18} />} strong />
+                </div>
+                <div className="mt-4 grid gap-3">
+                  <PreviewBox title="字幕プレビュー">
+                    {cues.length ? cues.slice(0, 6).map((cue) => <p key={cue.index}>{cue.text}</p>) : <p>文字起こし後に表示されます。</p>}
+                  </PreviewBox>
+                  <PreviewBox title="背景素材">
+                    {assets.length ? assets.map((asset) => <p key={asset.id}>{asset.source} / {asset.license}</p>) : <p>未準備。汎用背景にフォールバックします。</p>}
+                  </PreviewBox>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <aside className="space-y-5 lg:sticky lg:top-4 lg:self-start">
+          <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+            <SectionTitle icon={<Video size={20} />} title="完成動画" status={project?.status} />
+            {project?.videoPath ? (
+              <div className="mt-4 grid gap-3">
+                <video className="mx-auto aspect-[9/16] max-h-[520px] rounded-md bg-black" src={toMediaUrl(project.videoPath) || undefined} controls />
+                <a className="inline-flex items-center justify-center gap-2 rounded-md bg-teal-700 px-4 py-3 text-sm font-black text-white" href={toMediaUrl(project.videoPath) || "#"} download>
+                  <Download size={18} />
+                  MP4ダウンロード
+                </a>
+                {project.subtitlePath && (
+                  <a className="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-200 px-4 py-3 text-sm font-black dark:border-neutral-700" href={toMediaUrl(project.subtitlePath) || "#"} download>
+                    <Download size={18} />
+                    字幕ファイル
+                  </a>
+                )}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-lg border border-dashed border-neutral-300 p-5 text-sm leading-6 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
+                ここに完成動画が表示されます。FFmpeg未導入の場合は動画生成時にエラーが出ます。
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+            <h2 className="text-lg font-black">履歴</h2>
+            <div className="mt-3 space-y-2">
+              {projects.map((item) => (
+                <button key={item.id} className="w-full rounded-md border border-neutral-200 bg-[#fbfaf7] p-3 text-left text-sm hover:border-teal-700 dark:border-neutral-800 dark:bg-neutral-950" onClick={() => setProject(item)}>
+                  <span className="line-clamp-2 font-black">{item.news?.titleEn || item.shortsTitle || item.id}</span>
+                  <span className="mt-1 block text-xs text-neutral-500">{statusLabel[item.status] || item.status}</span>
+                </button>
+              ))}
+              {!projects.length && <p className="text-sm text-neutral-500">まだ履歴はありません。</p>}
+            </div>
+          </div>
+        </aside>
       </section>
     </main>
   );
 }
 
-function Panel({ title, icon, action, children }: { title: string; icon: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
+function SectionTitle({ icon, title, status }: { icon: React.ReactNode; title: string; status?: string }) {
   return (
-    <section className="rounded-md border border-line bg-panel p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-950">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-lg font-bold">{icon}{title}</h2>
-        {action}
-      </div>
-      {children}
-    </section>
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="flex items-center gap-2 text-lg font-black">{icon}{title}</h2>
+      {status && <span className="rounded-md bg-neutral-100 px-2 py-1 text-xs font-bold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">{statusLabel[status] || status}</span>}
+    </div>
   );
 }
 
-function IconButton({ label, icon, onClick, strong = false }: { label: string; icon: React.ReactNode; onClick: () => void; strong?: boolean }) {
+function Button({ label, icon, onClick, strong = false }: { label: string; icon: React.ReactNode; onClick: () => void; strong?: boolean }) {
   return (
-    <button className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-bold ${strong ? "bg-action text-white" : "border border-line bg-white dark:border-neutral-700 dark:bg-neutral-900"}`} onClick={onClick}>
+    <button className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-black transition ${strong ? "bg-teal-700 text-white hover:bg-teal-800" : "border border-neutral-200 bg-white hover:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950"}`} onClick={onClick}>
       {icon}
       {label}
     </button>
@@ -376,16 +412,25 @@ function Score({ label, value }: { label: string; value: number }) {
   return (
     <div>
       <div className="flex justify-between text-xs font-bold"><span>{label}</span><span>{value}</span></div>
-      <div className="mt-1 h-2 rounded bg-neutral-200 dark:bg-neutral-800"><div className="h-2 rounded bg-action" style={{ width: `${value}%` }} /></div>
+      <div className="mt-1 h-2 rounded-full bg-neutral-200 dark:bg-neutral-800"><div className="h-2 rounded-full bg-teal-700" style={{ width: `${value}%` }} /></div>
     </div>
   );
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-line bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900">
-      <div className="text-xs text-neutral-500">{label}</div>
-      <div className="mt-1 text-sm font-bold">{value}</div>
+    <div className="rounded-md border border-neutral-200 bg-[#fbfaf7] p-3 dark:border-neutral-800 dark:bg-neutral-950">
+      <div className="text-xs font-bold text-neutral-500">{label}</div>
+      <div className="mt-1 text-base font-black">{value}</div>
+    </div>
+  );
+}
+
+function PreviewBox({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-md border border-neutral-200 bg-[#fbfaf7] p-3 dark:border-neutral-800 dark:bg-neutral-950">
+      <h3 className="text-sm font-black">{title}</h3>
+      <div className="mt-2 space-y-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{children}</div>
     </div>
   );
 }
