@@ -62,7 +62,7 @@ function makeHook(news: NewsItem, tone: ScriptTone) {
 function makeNewsBody(news: NewsItem, tone: ScriptTone) {
   const topic = news.titleEn.replace(/\.$/, "");
   const category = news.category.toLowerCase();
-  const context = news.summaryJa;
+  const context = cleanJapaneseSummary(news.summaryJa);
   const numbers = extractQuantitativeHighlights(context);
   const numberLine = numbers.length
     ? `Concrete figures: ${numbers.slice(0, 4).map(formatQuantityForEnglish).join(", ")}.`
@@ -108,14 +108,25 @@ function makeJapaneseTranslation(news: NewsItem) {
     .map((signal) => `${signal.labelJa}。${signal.reasonJa}。`)
     .join("");
   const nikkei = assessNikkeiImpact(news);
+  const summary = cleanJapaneseSummary(news.summaryJa);
   return [
     `① 冒頭: 日本で新しいニュースが出ました。しかも、見た目よりずっと重要かもしれません。「${news.titleJa}」。`,
     "② 決まり文句: Welcome to Japan News Studio。1分で、日本で本当に起きていることを英語で見ていきます。",
-    `③ ニュースの内容: 内容はこうです。${news.summaryJa}`,
+    `③ ニュースの内容: 内容はこうです。${summary}`,
     `④ 経済への影響: 特に見たいのは${signals} 日経平均への方向感は「${nikkei.directionJa}」です。確信度は${nikkei.confidenceJa}。理由は${nikkei.reasonJa}。`,
     "⑤ シニカルな締め: 日本は今日の予算で明日の問題を解こうとしています。まあ、それはだいたいどの国も好きな手品です。",
     "⑥ 最後の決まり文句: 高評価、チャンネル登録、そしてコメントで意見を教えてください。これは賢い政策なのか、それとも高い書類仕事なのか。"
   ].join("\n\n");
+}
+
+function cleanJapaneseSummary(summary: string) {
+  return summary
+    .replace(/記事本文要約[:：]\s*/g, "")
+    .replace(/具体的な数字[:：][^。]*。?/g, "")
+    .replace(/確認ポイント[:：][^。]*。?/g, "")
+    .replace(/【NHK】/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function extractQuantitativeHighlights(text: string) {

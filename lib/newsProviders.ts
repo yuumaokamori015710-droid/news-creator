@@ -251,14 +251,9 @@ function summarizeArticleJa(item: RawNews, articleText: string) {
   const summaryText = picked.join("");
   const highlights = extractQuantitativeHighlights(summaryText || baseText).slice(0, 5);
 
-  if (!picked.length) {
-    return item.summary || `${item.sourceName}の公開情報です。記事本文から十分な本文を抽出できませんでした。`;
-  }
+  if (!picked.length) return item.summary || `${item.sourceName}の公開情報です。記事本文から十分な本文を抽出できませんでした。`;
 
-  const watchPoint = makeJapaneseWatchPoint(item, picked.join(""));
-  return highlights.length
-    ? `${picked.join("")} ${highlights.join("、")}が焦点になります。${watchPoint}`
-    : `${picked.join("")} ${watchPoint}`;
+  return compactArticleSummary(picked, highlights);
 }
 
 function extractReadableText(html: string) {
@@ -301,15 +296,25 @@ function extractQuantitativeHighlights(text: string) {
     .slice(0, 8);
 }
 
-function makeJapaneseWatchPoint(item: RawNews, text: string) {
-  const combined = `${item.title} ${item.category} ${text}`;
-  if (/円|為替|ドル/.test(combined)) return "為替水準、輸出企業の採算、輸入物価、政府・日銀のけん制発言。";
-  if (/日銀|金利|物価|賃金/.test(combined)) return "日銀の政策期待、長期金利、銀行株、グロース株への逆風。";
-  if (/決算|業績|上方|下方|配当|自社株/.test(combined)) return "企業業績の上振れ・下振れ、海外投資家の日本株需給。";
-  if (/AI|半導体|ロボット|技術/.test(combined)) return "半導体関連、設備投資、AIテーマ株への波及。";
-  if (/観光|訪日|旅行|ホテル/.test(combined)) return "小売、鉄道、ホテル、外食などインバウンド関連消費。";
-  if (/気象|台風|大雨|地震|災害/.test(combined)) return "物流、工場稼働、保険、消費マインドへの短期影響。";
-  return "日本企業決算、ドル円、海外投資家需給、日経平均の方向感。";
+function compactArticleSummary(sentences: string[], highlights: string[]) {
+  const summary = uniqueByMeaning(sentences)
+    .map(cleanSummarySentence)
+    .filter(Boolean)
+    .slice(0, 3)
+    .join("");
+  if (!highlights.length) return summary;
+  const usefulHighlights = highlights.filter((highlight) => !summary.includes(highlight)).slice(0, 2);
+  return usefulHighlights.length ? `${summary}${usefulHighlights.join("、")}にも注目です。` : summary;
+}
+
+function cleanSummarySentence(sentence: string) {
+  return sentence
+    .replace(/【NHK】/g, "")
+    .replace(/記事本文要約[:：]\s*/g, "")
+    .replace(/具体的な数字[:：][^。]*。?/g, "")
+    .replace(/確認ポイント[:：][^。]*。?/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function isRelevantSentence(sentence: string, item: RawNews) {
@@ -367,6 +372,18 @@ function uniqueByText(values: string[]) {
   return values.filter((value) => {
     const key = value.replace(/\s+/g, "");
     if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function uniqueByMeaning(values: string[]) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const cleaned = cleanSummarySentence(value).replace(/[、。・\s]/g, "");
+    const key = cleaned.slice(0, 42);
+    if (!key || seen.has(key)) return false;
+    if ([...seen].some((existing) => existing.includes(key) || key.includes(existing))) return false;
     seen.add(key);
     return true;
   });
