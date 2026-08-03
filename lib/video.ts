@@ -22,15 +22,16 @@ export async function generateVideo(project: Project) {
   const cues = makeSubtitleCues(transcript, subtitleDuration);
   const { assPath } = saveSubtitles(project.id, cues);
 
-  const title = sanitizeDrawText(project.shortsTitle || project.news?.titleEn || "Japan News");
+  const title = sanitizeDrawText(project.shortsTitle || project.news?.titleEn || "Japan News").slice(0, 34);
   const subtitlePath = assPath.replace(/\\/g, "/").replace(/:/g, "\\:");
-  const countdown = "drawtext=text='%{eif\\:max(0\\,60-t)\\:d}s':fontcolor=white:fontsize=56:x=w-tw-72:y=118:box=1:boxcolor=black@0.55:boxborderw=18";
+  const countdown = "drawtext=text='%{eif\\:max(0\\,60-t)\\:d}s':fontcolor=white:fontsize=44:x=w-tw-56:y=96:box=1:boxcolor=black@0.55:boxborderw=14";
   const usesGeneratedBackground = path.extname(asset.localPath).toLowerCase() === ".svg";
+  const visualProfile = pickVisualProfile(project);
   const videoInputArgs = usesGeneratedBackground
-    ? ["-f", "lavfi", "-i", "color=c=0x173f3a:s=1080x1920:r=30"]
+    ? ["-f", "lavfi", "-i", `color=c=${visualProfile.background}:s=1080x1920:r=30`]
     : ["-loop", "1", "-i", asset.localPath];
   const baseVideoFilter = usesGeneratedBackground
-    ? "format=yuv420p,noise=alls=16:allf=t+u,drawbox=x=(t*90)-floor(t*90/1260)*1260-180:y=0:w=180:h=1920:color=white@0.08:t=fill,drawbox=x=1080-((t*54)-floor(t*54/1320)*1320):y=0:w=150:h=1920:color=0x0f766e@0.22:t=fill,drawbox=x=0:y=0:w=1080:h=1920:color=black@0.10:t=fill"
+    ? buildGeneratedBackgroundFilter(visualProfile)
     : "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p,drawbox=x=0:y=0:w=1080:h=1920:color=black@0.28:t=fill";
   const args = [
     "-y",
@@ -38,7 +39,7 @@ export async function generateVideo(project: Project) {
     "-i",
     project.audioPath,
     "-vf",
-    `${baseVideoFilter},drawtext=text='${title}':fontcolor=white:fontsize=60:x=72:y=120:box=1:boxcolor=black@0.45:boxborderw=22,${countdown},subtitles='${subtitlePath}'`,
+    `${baseVideoFilter},drawtext=text='${title}':fontcolor=white:fontsize=42:x=56:y=96:box=1:boxcolor=black@0.45:boxborderw=16,${countdown},subtitles='${subtitlePath}'`,
     "-r",
     "30",
     "-c:v",
@@ -64,4 +65,89 @@ export async function generateVideo(project: Project) {
 
 function sanitizeDrawText(value: string) {
   return value.replace(/[\\:']/g, " ").slice(0, 74);
+}
+
+type VisualProfile = {
+  background: string;
+  accent: string;
+  glow: string;
+  tokens: string[];
+};
+
+function pickVisualProfile(project: Project): VisualProfile {
+  const text = [
+    project.shortsTitle,
+    project.scriptEn,
+    project.transcription,
+    project.searchKeywords,
+    project.news?.titleJa,
+    project.news?.summaryJa,
+    project.news?.category
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (matchesAny(text, ["yen", "jpy", "dollar", "currency", "intervention", "為替", "介入", "円", "ドル"])) {
+    return {
+      background: "0x102a2a",
+      accent: "0xf8fafc",
+      glow: "0x0f766e",
+      tokens: ["YEN", "JPY", "USD/JPY", "4T YEN", "FX"]
+    };
+  }
+  if (matchesAny(text, ["ai", "semiconductor", "chip", "robot", "technology", "半導体", "ロボット"])) {
+    return {
+      background: "0x111827",
+      accent: "0x93c5fd",
+      glow: "0x22d3ee",
+      tokens: ["AI", "CHIP", "DATA", "ROBOT", "TOKYO"]
+    };
+  }
+  if (matchesAny(text, ["weather", "typhoon", "rain", "earthquake", "disaster", "台風", "大雨", "地震", "災害"])) {
+    return {
+      background: "0x1f2937",
+      accent: "0xbfdbfe",
+      glow: "0x38bdf8",
+      tokens: ["ALERT", "RAIN", "JMA", "SAFETY", "MAP"]
+    };
+  }
+  if (matchesAny(text, ["tourism", "travel", "visitor", "hotel", "観光", "訪日", "旅行"])) {
+    return {
+      background: "0x172554",
+      accent: "0xfef3c7",
+      glow: "0xf59e0b",
+      tokens: ["TOKYO", "HOTEL", "TRAIN", "VISIT", "YEN"]
+    };
+  }
+  return {
+    background: "0x173f3a",
+    accent: "0xf8fafc",
+    glow: "0x14b8a6",
+    tokens: ["JAPAN", "NEWS", "MARKET", "TODAY", "60 SEC"]
+  };
+}
+
+function buildGeneratedBackgroundFilter(profile: VisualProfile) {
+  const fallingText = profile.tokens.map((token, index) => {
+    const x = 96 + ((index * 187) % 820);
+    const speed = 76 + index * 18;
+    const offset = index * 360;
+    const size = index % 2 === 0 ? 72 : 54;
+    const alpha = index % 2 === 0 ? "0.52" : "0.36";
+    return `drawtext=text='${sanitizeDrawText(token)}':fontcolor=${profile.accent}@${alpha}:fontsize=${size}:x=${x}:y=mod(t*${speed}+${offset}\\,2200)-220:box=1:boxcolor=black@0.18:boxborderw=14`;
+  });
+
+  return [
+    "format=yuv420p",
+    `drawbox=x=0:y=0:w=1080:h=1920:color=${profile.glow}@0.16:t=fill`,
+    `drawbox=x=(t*82)-floor(t*82/1280)*1280-220:y=0:w=220:h=1920:color=${profile.accent}@0.08:t=fill`,
+    `drawbox=x=1080-((t*46)-floor(t*46/1340)*1340):y=0:w=170:h=1920:color=${profile.glow}@0.24:t=fill`,
+    ...fallingText,
+    "drawbox=x=0:y=0:w=1080:h=1920:color=black@0.18:t=fill"
+  ].join(",");
+}
+
+function matchesAny(text: string, keywords: string[]) {
+  return keywords.some((keyword) => text.includes(keyword.toLowerCase()));
 }
