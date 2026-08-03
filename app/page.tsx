@@ -161,7 +161,7 @@ export default function Home() {
     });
     setProject(data.project);
     setMessage("台本を保存しました。");
-    setView("audio");
+    setView("script");
   }
 
   async function startRecording() {
@@ -192,7 +192,7 @@ export default function Home() {
     const data = await api<{ project: Project }>(`/api/projects/${project.id}/audio`, { method: "POST", body: form });
     setProject(data.project);
     setMessage("音声を保存しました。");
-    setView("audio");
+    setView(view === "script" ? "script" : "audio");
   }
 
   async function transcribe() {
@@ -396,9 +396,35 @@ export default function Home() {
                   <textarea className="h-[calc(100vh-305px)] min-h-[600px] w-full rounded-lg border border-neutral-200 bg-[#fbfaf7] p-5 text-base font-semibold leading-8 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950 xl:min-h-[660px]" value={project.scriptJa} onChange={(event) => setProject({ ...project, scriptJa: event.target.value })} />
                 </div>
               </div>
+              <div className="mt-3 rounded-lg border border-neutral-200 bg-[#fbfaf7] p-3 dark:border-neutral-800 dark:bg-neutral-950">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                  <div>
+                    <h3 className="flex items-center gap-2 text-sm font-black">
+                      <Mic size={18} />
+                      音声
+                    </h3>
+                    <p className="mt-1 text-xs font-bold text-neutral-500">台本を見ながらこの画面で録音できます。</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {!recording ? (
+                      <Button label="録音開始" onClick={startRecording} icon={<Mic size={18} />} strong />
+                    ) : (
+                      <Button label="録音停止" onClick={stopRecording} icon={<Check size={18} />} strong />
+                    )}
+                    <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-neutral-200 bg-white px-4 py-3 text-sm font-black dark:border-neutral-700 dark:bg-neutral-950">
+                      <Upload size={18} />
+                      アップロード
+                      <input className="sr-only" type="file" accept="audio/*" onChange={(event) => event.target.files?.[0] && uploadAudio(event.target.files[0])} />
+                    </label>
+                    {(audioPreview || project.audioPath) && <Button label="字幕生成へ" onClick={transcribe} icon={<FileAudio size={18} />} />}
+                  </div>
+                </div>
+                {(audioPreview || project.audioPath) && <audio controls className="mt-3 w-full" src={audioPreview || toMediaUrl(project.audioPath) || undefined} />}
+              </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button label="ニュースに戻る" onClick={() => setView("news")} icon={<Newspaper size={18} />} />
-                <Button label="台本を保存" onClick={saveScript} icon={<Save size={18} />} strong />
+                <Button label="台本を保存" onClick={saveScript} icon={<Save size={18} />} />
+                <Button label="音声画面へ" onClick={() => setView("audio")} icon={<Mic size={18} />} strong />
               </div>
             </div>
           )}
