@@ -252,14 +252,13 @@ function summarizeArticleJa(item: RawNews, articleText: string) {
   const highlights = extractQuantitativeHighlights(summaryText || baseText).slice(0, 5);
 
   if (!picked.length) {
-    return `${item.summary || `${item.sourceName}の公開情報です。`} 記事本文から十分な本文を抽出できませんでした。具体的な数字: ${highlights.length ? highlights.join("、") : "記事内で確認できる主要数値は限定的です。"}`;
+    return item.summary || `${item.sourceName}の公開情報です。記事本文から十分な本文を抽出できませんでした。`;
   }
 
-  return [
-    `記事本文要約: ${picked.join("")}`,
-    `具体的な数字: ${highlights.length ? highlights.join("、") : "記事内で確認できる主要数値は限定的です。"}`,
-    `確認ポイント: ${makeJapaneseWatchPoint(item, picked.join(""))}`
-  ].join(" ");
+  const watchPoint = makeJapaneseWatchPoint(item, picked.join(""));
+  return highlights.length
+    ? `${picked.join("")} ${highlights.join("、")}が焦点になります。${watchPoint}`
+    : `${picked.join("")} ${watchPoint}`;
 }
 
 function extractReadableText(html: string) {
