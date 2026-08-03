@@ -4,9 +4,9 @@ export type ScriptTone = "simple" | "natural" | "shorter" | "impact" | "objectiv
 
 type MarketSignal = {
   item: string;
-  score: string;
-  direction: string;
+  labelJa: string;
   reason: string;
+  reasonJa: string;
 };
 
 export function generateScript(news: NewsItem, tone: ScriptTone = "simple") {
@@ -85,15 +85,15 @@ function makeEconomicImpact(news: NewsItem, tone: ScriptTone) {
   const signals = pickMarketSignals(news).slice(0, 2);
   const nikkei = assessNikkeiImpact(news);
   const signalText = signals
-    .map((signal) => `${signal.item} ${signal.score} ${signal.direction}: ${signal.reason}`)
+    .map((signal) => `${signal.item}: ${signal.reason}`)
     .join("; ");
   if (tone === "objective") {
-    return `Economically, watch: ${signalText}. Nikkei bias: ${nikkei.direction}, confidence ${nikkei.confidence}, because ${nikkei.reason}.`;
+    return `Economically, watch ${signalText}. For the Nikkei Average, the bias is ${nikkei.direction}, with ${nikkei.confidence} confidence, because ${nikkei.reason}.`;
   }
   if (tone === "impact") {
-    return `Economically, watch: ${signalText}. Nikkei bias: ${nikkei.direction}, confidence ${nikkei.confidence}, because ${nikkei.reason}.`;
+    return `Economically, watch ${signalText}. For the Nikkei Average, the bias is ${nikkei.direction}, with ${nikkei.confidence} confidence, because ${nikkei.reason}.`;
   }
-  return `For the economy, watch: ${signalText}. Nikkei bias: ${nikkei.direction}, confidence ${nikkei.confidence}, because ${nikkei.reason}.`;
+  return `For the economy, watch ${signalText}. For the Nikkei Average, the bias is ${nikkei.direction}, with ${nikkei.confidence} confidence, because ${nikkei.reason}.`;
 }
 
 function makeCynicalClose(news: NewsItem) {
@@ -104,15 +104,16 @@ function makeCynicalClose(news: NewsItem) {
 
 function makeJapaneseTranslation(news: NewsItem) {
   const signals = pickMarketSignals(news)
-    .map((signal) => `${signal.item}（${signal.score}）は${signal.direction}方向。理由は${signal.reason}。`)
-    .join(" ");
+    .slice(0, 2)
+    .map((signal) => `${signal.labelJa}。${signal.reasonJa}。`)
+    .join("");
   const nikkei = assessNikkeiImpact(news);
   const numbers = extractQuantitativeHighlights(news.summaryJa);
   return [
     `① 冒頭: 日本で新しいニュースが出ました。しかも、見た目よりずっと重要かもしれません。「${news.titleJa}」。`,
     "② 決まり文句: Welcome to Japan News Studio。1分で、日本で本当に起きていることを英語で見ていきます。",
     `③ ニュースの内容: 内容はこうです。${news.summaryJa} ${numbers.length ? `具体的な数字は、${numbers.slice(0, 4).join("、")}です。` : "記事内で確認できる主要数値は限定的です。"}`,
-    `④ 経済への影響: スコア表で特に動きそうなのはここです。${signals} 最終的な日経平均への方向感は「${nikkei.direction}」、確信度は${nikkei.confidence}です。理由は${nikkei.reason}。`,
+    `④ 経済への影響: 特に見たいのは${signals} 日経平均への方向感は「${nikkei.directionJa}」です。確信度は${nikkei.confidenceJa}。理由は${nikkei.reasonJa}。`,
     "⑤ シニカルな締め: 日本は今日の予算で明日の問題を解こうとしています。まあ、それはだいたいどの国も好きな手品です。",
     "⑥ 最後の決まり文句: 高評価、チャンネル登録、そしてコメントで意見を教えてください。これは賢い政策なのか、それとも高い書類仕事なのか。"
   ].join("\n\n");
@@ -152,30 +153,71 @@ function assessNikkeiImpact(news: NewsItem) {
   if (yenMove === "stronger") {
     return {
       direction: "slight downside",
+      directionJa: "やや下振れ",
       confidence: "medium",
-      reason: "a stronger yen can pressure exporters, even if it helps import costs and households"
+      confidenceJa: "中くらい",
+      reason: "a stronger yen can pressure exporters, even if it helps import costs and households",
+      reasonJa: "円高方向に振れると、輸入コストや家計にはプラスでも、日経平均の比重が大きい輸出企業には逆風になりやすいからです"
     };
   }
   if (yenMove === "weaker") {
     return {
       direction: "slight upside",
+      directionJa: "やや上振れ",
       confidence: "medium",
-      reason: "a weaker yen supports exporter earnings, but intervention risk caps the upside"
+      confidenceJa: "中くらい",
+      reason: "a weaker yen supports exporter earnings, but intervention risk caps the upside",
+      reasonJa: "円安は輸出企業の利益を押し上げやすい一方、介入警戒が上値を抑えやすいからです"
     };
   }
   if (matches(text, ["日銀", "利上げ", "タカ派", "金利上昇", "boj", "rate hike", "hawkish"])) {
-    return { direction: "downside", confidence: "medium", reason: "higher rate expectations usually hurt growth stocks and valuation multiples" };
+    return {
+      direction: "downside",
+      directionJa: "下振れ",
+      confidence: "medium",
+      confidenceJa: "中くらい",
+      reason: "higher rate expectations usually hurt growth stocks and valuation multiples",
+      reasonJa: "金利上昇期待はグロース株や株価のバリュエーションに逆風になりやすいからです"
+    };
   }
   if (matches(text, ["AI", "半導体", "上方", "増益", "好決算", "自社株", "増配", "robot", "semiconductor"])) {
-    return { direction: "upside", confidence: "medium", reason: "tech demand or stronger earnings can support index-heavy Japanese names" };
+    return {
+      direction: "upside",
+      directionJa: "上振れ",
+      confidence: "medium",
+      confidenceJa: "中くらい",
+      reason: "tech demand or stronger earnings can support index-heavy Japanese names",
+      reasonJa: "半導体や好決算の材料は、日経平均への寄与が大きい主力株を支えやすいからです"
+    };
   }
   if (matches(text, ["下方", "減益", "赤字", "減配", "大雨", "台風", "地震", "災害", "地政学", "war"])) {
-    return { direction: "downside", confidence: "medium", reason: "earnings damage, disruption, or risk-off sentiment can weigh on the index" };
+    return {
+      direction: "downside",
+      directionJa: "下振れ",
+      confidence: "medium",
+      confidenceJa: "中くらい",
+      reason: "earnings damage, disruption, or risk-off sentiment can weigh on the index",
+      reasonJa: "企業活動の停止やリスク回避ムードが、指数全体の重しになりやすいからです"
+    };
   }
   if (matches(text, ["訪日", "観光", "旅行", "ホテル", "消費"])) {
-    return { direction: "modest upside", confidence: "low to medium", reason: "inbound demand can help domestic consumption stocks, but the index impact is narrower" };
+    return {
+      direction: "modest upside",
+      directionJa: "小幅に上振れ",
+      confidence: "low to medium",
+      confidenceJa: "低めから中くらい",
+      reason: "inbound demand can help domestic consumption stocks, but the index impact is narrower",
+      reasonJa: "インバウンド消費は内需株には追い風ですが、日経平均全体への波及はやや限定的だからです"
+    };
   }
-  return { direction: "neutral to slightly mixed", confidence: "low", reason: "the article does not yet show a strong channel into index earnings, rates, or the yen" };
+  return {
+    direction: "neutral to slightly mixed",
+    directionJa: "中立からややまちまち",
+    confidence: "low",
+    confidenceJa: "低め",
+    reason: "the article does not yet show a strong channel into index earnings, rates, or the yen",
+    reasonJa: "企業業績、金利、為替のどれに効くかがまだはっきりしないからです"
+  };
 }
 
 function inferYenMove(text: string) {
@@ -194,57 +236,57 @@ function pickMarketSignals(news: NewsItem): MarketSignal[] {
   const text = `${news.category} ${news.titleJa} ${news.titleEn} ${news.summaryJa}`.toLowerCase();
   if (matches(text, ["円", "ドル", "為替", "yen", "currency", "import", "export", "輸出", "輸入"])) {
     return [
-      { item: "Dollar-yen", score: "8/15", direction: "first", reason: "exporters, import prices, and intervention risk move fast" },
-      { item: "Japanese earnings", score: "8/10", direction: "next", reason: "the yen changes profit guidance" },
-      { item: "Nikkei futures technicals", score: "3/5", direction: "after that", reason: "futures react before the real economy catches up" }
+      { item: "dollar-yen", labelJa: "ドル円の動き", reason: "exporters, import prices, and intervention risk move fast", reasonJa: "為替が動くと、輸出企業の採算、輸入物価、介入警戒がすぐに動きます" },
+      { item: "Japanese corporate earnings", labelJa: "日本企業の業績見通し", reason: "the yen changes profit guidance", reasonJa: "円高・円安は企業の利益見通しに直接効きやすいです" },
+      { item: "Nikkei futures", labelJa: "日経先物", reason: "futures react before the real economy catches up", reasonJa: "現物株より先に短期筋が反応しやすいです" }
     ];
   }
   if (matches(text, ["AI", "半導体", "chip", "semiconductor", "technology", "robot", "ロボット", "tech"])) {
     return [
-      { item: "U.S. stocks, S&P and NASDAQ", score: "17/20", direction: "first", reason: "AI earnings are already strong" },
-      { item: "SOX semiconductors", score: "11/15", direction: "next", reason: "chip demand can reprice suppliers" },
-      { item: "Japanese earnings", score: "8/10", direction: "after that", reason: "investors ask who turns the theme into profit" }
+      { item: "U.S. tech stocks and NASDAQ", labelJa: "米国ハイテク株とNASDAQ", reason: "AI earnings are already strong", reasonJa: "AI関連の決算が強いと、日本の半導体・電子部品株にも連想買いが入りやすいです" },
+      { item: "semiconductor stocks", labelJa: "半導体関連株", reason: "chip demand can reprice suppliers", reasonJa: "半導体需要の見方が変わると、関連銘柄の評価が動きやすいです" },
+      { item: "Japanese corporate earnings", labelJa: "日本企業の業績", reason: "investors ask who turns the theme into profit", reasonJa: "テーマだけでなく、実際に利益へつながる企業が買われやすいです" }
     ];
   }
   if (matches(text, ["日銀", "boj", "金利", "rate", "yield", "物価", "inflation", "賃金", "wage"])) {
     return [
-      { item: "Bank of Japan", score: "4/10", direction: "first", reason: "inflation or wages shift policy expectations" },
-      { item: "U.S. 10-year yield", score: "3/10", direction: "next", reason: "higher yields pressure equities" },
-      { item: "Dollar-yen", score: "8/15", direction: "after that", reason: "rate gaps hit currencies" }
+      { item: "Bank of Japan expectations", labelJa: "日銀の政策期待", reason: "inflation or wages shift policy expectations", reasonJa: "物価や賃金の材料は、利上げ期待に直結しやすいです" },
+      { item: "long-term yields", labelJa: "長期金利", reason: "higher yields pressure equities", reasonJa: "金利が上がると株式の割高感が意識されやすくなります" },
+      { item: "dollar-yen", labelJa: "ドル円", reason: "rate gaps hit currencies", reasonJa: "日米金利差の見方が為替に出やすいです" }
     ];
   }
   if (matches(text, ["決算", "earnings", "tdnet", "profit", "sales", "revenue", "企業"])) {
     return [
-      { item: "Japanese earnings", score: "8/10", direction: "first", reason: "guidance directly moves prices" },
-      { item: "Foreign investor flows", score: "3/5", direction: "next", reason: "overseas investors adjust Japan exposure" },
-      { item: "Nikkei futures technicals", score: "3/5", direction: "after that", reason: "earnings surprises hit futures quickly" }
+      { item: "Japanese corporate earnings", labelJa: "日本企業の決算と業績見通し", reason: "guidance directly moves prices", reasonJa: "上方修正や下方修正は株価に直接反映されやすいです" },
+      { item: "foreign investor flows", labelJa: "海外投資家の日本株需給", reason: "overseas investors adjust Japan exposure", reasonJa: "海外勢が日本株を増やすか減らすかで指数の方向感が変わります" },
+      { item: "Nikkei futures", labelJa: "日経先物", reason: "earnings surprises hit futures quickly", reasonJa: "決算サプライズは先物にも早く出やすいです" }
     ];
   }
   if (matches(text, ["気象", "台風", "地震", "災害", "weather", "jma", "alert", "rain"])) {
     return [
-      { item: "VIX", score: "4/5", direction: "first", reason: "disaster headlines lift risk awareness" },
-      { item: "Japanese earnings", score: "8/10", direction: "next", reason: "transport and factories can be disrupted" },
-      { item: "Nikkei futures technicals", score: "3/5", direction: "after that", reason: "traders price temporary shocks" }
+      { item: "risk sentiment", labelJa: "投資家のリスク回避姿勢", reason: "disaster headlines lift risk awareness", reasonJa: "災害や警報は短期的にリスク回避を強めやすいです" },
+      { item: "Japanese corporate earnings", labelJa: "日本企業の短期業績", reason: "transport and factories can be disrupted", reasonJa: "物流や工場稼働が止まると、一部企業の業績に影響します" },
+      { item: "Nikkei futures", labelJa: "日経先物", reason: "traders price temporary shocks", reasonJa: "短期の不安材料は先物から反応しやすいです" }
     ];
   }
   if (matches(text, ["観光", "訪日", "tourism", "travel", "hotel", "visitor", "消費"])) {
     return [
-      { item: "Japanese earnings", score: "8/10", direction: "first", reason: "retail, rail, and hotel profits can react" },
-      { item: "Dollar-yen", score: "8/15", direction: "next", reason: "the yen changes how cheap Japan feels" },
-      { item: "Foreign investor flows", score: "3/5", direction: "after that", reason: "tourism supports the Japan narrative" }
+      { item: "domestic consumption stocks", labelJa: "内需・消費関連株", reason: "retail, rail, and hotel profits can react", reasonJa: "小売、鉄道、ホテル、外食の売上に効きやすいです" },
+      { item: "dollar-yen", labelJa: "ドル円", reason: "the yen changes how cheap Japan feels", reasonJa: "円安なら訪日客にとって日本が割安に見えやすいです" },
+      { item: "foreign investor flows", labelJa: "海外投資家の日本株需給", reason: "tourism supports the Japan narrative", reasonJa: "日本株への見方が少し明るくなりやすいです" }
     ];
   }
   if (matches(text, ["中東", "war", "security", "geopolitical", "地政学", "energy", "oil"])) {
     return [
-      { item: "Geopolitics", score: "2/5", direction: "first", reason: "fresh headlines raise the risk discount" },
-      { item: "U.S. 10-year yield", score: "3/10", direction: "next", reason: "safe-haven and inflation trades affect yields" },
-      { item: "Dollar-yen", score: "8/15", direction: "after that", reason: "risk-off moves through currencies" }
+      { item: "geopolitical risk", labelJa: "地政学リスク", reason: "fresh headlines raise the risk discount", reasonJa: "地政学リスクが高まると株式のリスク許容度が下がりやすいです" },
+      { item: "long-term yields", labelJa: "長期金利", reason: "safe-haven and inflation trades affect yields", reasonJa: "安全資産需要やインフレ懸念が金利を動かしやすいです" },
+      { item: "dollar-yen", labelJa: "ドル円", reason: "risk-off moves through currencies", reasonJa: "リスク回避局面では為替にも動きが出やすいです" }
     ];
   }
   return [
-    { item: "Japanese earnings", score: "8/10", direction: "first", reason: "profits connect news to markets" },
-    { item: "Dollar-yen", score: "8/15", direction: "next", reason: "currency changes costs and margins" },
-    { item: "Foreign investor flows", score: "3/5", direction: "after that", reason: "global investors adjust Japan exposure" }
+    { item: "Japanese corporate earnings", labelJa: "日本企業の業績", reason: "profits connect news to markets", reasonJa: "最終的には企業利益に効くかどうかが株価を左右します" },
+    { item: "dollar-yen", labelJa: "ドル円", reason: "currency changes costs and margins", reasonJa: "為替はコストと利益率に効きやすいです" },
+    { item: "foreign investor flows", labelJa: "海外投資家の日本株需給", reason: "global investors adjust Japan exposure", reasonJa: "海外勢の資金配分が指数を動かすことがあります" }
   ];
 }
 
