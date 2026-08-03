@@ -35,11 +35,11 @@ const statusLabel: Record<string, string> = {
 };
 
 const tones = [
-  ["simple", "簡単"],
-  ["natural", "自然"],
-  ["shorter", "短く"],
+  ["simple", "やさしい英語"],
+  ["natural", "自然な英語"],
+  ["shorter", "短め"],
   ["impact", "強め"],
-  ["objective", "客観"]
+  ["objective", "客観寄り"]
 ];
 
 const workflow = [
@@ -279,28 +279,49 @@ export default function Home() {
             </div>
           </div>
 
-          <div className={`mt-4 rounded-lg border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900 ${view === "script" ? "p-3" : "p-4"}`}>
-            <SectionTitle icon={<Video size={20} />} title="完成動画" status={project?.status} />
-            {project?.videoPath ? (
-              <div className="mt-4 grid gap-3">
-                <video className={`mx-auto aspect-[9/16] rounded-md bg-black ${view === "script" ? "max-h-[220px]" : "max-h-[300px]"}`} src={toMediaUrl(project.videoPath) || undefined} controls />
-                <a className="inline-flex items-center justify-center gap-2 rounded-md bg-teal-700 px-4 py-3 text-sm font-black text-white" href={toMediaUrl(project.videoPath) || "#"} download>
-                  <Download size={18} />
-                  MP4
-                </a>
-                {project.subtitlePath && (
-                  <a className="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-200 px-4 py-3 text-sm font-black dark:border-neutral-700" href={toMediaUrl(project.subtitlePath) || "#"} download>
-                    <Download size={18} />
-                    字幕
-                  </a>
+          {view === "script" ? (
+            <div className="mt-4 rounded-lg border border-neutral-200 bg-white p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+              <SectionTitle icon={<Mic size={20} />} title="音声" status={project?.status} />
+              <p className="mt-3 text-xs font-bold leading-5 text-neutral-500">台本を見ながら録音できます。</p>
+              <div className="mt-3 grid gap-2">
+                {!recording ? (
+                  <Button label="録音開始" onClick={startRecording} icon={<Mic size={18} />} strong />
+                ) : (
+                  <Button label="録音停止" onClick={stopRecording} icon={<Check size={18} />} strong />
                 )}
+                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-neutral-200 bg-white px-4 py-3 text-sm font-black dark:border-neutral-700 dark:bg-neutral-950">
+                  <Upload size={18} />
+                  音声アップロード
+                  <input className="sr-only" type="file" accept="audio/*" onChange={(event) => event.target.files?.[0] && uploadAudio(event.target.files[0])} />
+                </label>
+                {(audioPreview || project?.audioPath) && <Button label="字幕生成へ" onClick={transcribe} icon={<FileAudio size={18} />} />}
               </div>
-            ) : (
-              <div className={`mt-4 rounded-lg border border-dashed border-neutral-300 text-sm leading-6 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300 ${view === "script" ? "p-3" : "p-4"}`}>
-                完成したらここに表示します。
-              </div>
-            )}
-          </div>
+              {(audioPreview || project?.audioPath) && <audio controls className="mt-3 w-full" src={audioPreview || toMediaUrl(project?.audioPath) || undefined} />}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+              <SectionTitle icon={<Video size={20} />} title="完成動画" status={project?.status} />
+              {project?.videoPath ? (
+                <div className="mt-4 grid gap-3">
+                  <video className="mx-auto aspect-[9/16] max-h-[300px] rounded-md bg-black" src={toMediaUrl(project.videoPath) || undefined} controls />
+                  <a className="inline-flex items-center justify-center gap-2 rounded-md bg-teal-700 px-4 py-3 text-sm font-black text-white" href={toMediaUrl(project.videoPath) || "#"} download>
+                    <Download size={18} />
+                    MP4
+                  </a>
+                  {project.subtitlePath && (
+                    <a className="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-200 px-4 py-3 text-sm font-black dark:border-neutral-700" href={toMediaUrl(project.subtitlePath) || "#"} download>
+                      <Download size={18} />
+                      字幕
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-lg border border-dashed border-neutral-300 p-4 text-sm leading-6 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
+                  完成したらここに表示します。
+                </div>
+              )}
+            </div>
+          )}
         </aside>
 
         <section className="space-y-5">
@@ -368,8 +389,9 @@ export default function Home() {
               )}
               <div className="mt-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <div className="flex flex-wrap gap-2">
+                  <span className="flex items-center px-1 text-xs font-black uppercase text-neutral-500">台本トーン</span>
                   {tones.map(([value, label]) => (
-                    <button key={value} className={`rounded-md border px-3 py-2 text-sm font-bold ${tone === value ? "border-teal-700 bg-teal-50 text-teal-900 dark:bg-teal-950 dark:text-teal-100" : "border-neutral-200 dark:border-neutral-700"}`} onClick={() => setTone(value)}>
+                    <button key={value} title="台本の言い回しを変えて再生成します" className={`rounded-md border px-3 py-2 text-sm font-bold ${tone === value ? "border-teal-700 bg-teal-50 text-teal-900 dark:bg-teal-950 dark:text-teal-100" : "border-neutral-200 dark:border-neutral-700"}`} onClick={() => setTone(value)}>
                       {label}
                     </button>
                   ))}
@@ -395,31 +417,6 @@ export default function Home() {
                   </div>
                   <textarea className="h-[calc(100vh-305px)] min-h-[600px] w-full rounded-lg border border-neutral-200 bg-[#fbfaf7] p-5 text-base font-semibold leading-8 outline-none focus:border-teal-700 dark:border-neutral-700 dark:bg-neutral-950 xl:min-h-[660px]" value={project.scriptJa} onChange={(event) => setProject({ ...project, scriptJa: event.target.value })} />
                 </div>
-              </div>
-              <div className="mt-3 rounded-lg border border-neutral-200 bg-[#fbfaf7] p-3 dark:border-neutral-800 dark:bg-neutral-950">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                  <div>
-                    <h3 className="flex items-center gap-2 text-sm font-black">
-                      <Mic size={18} />
-                      音声
-                    </h3>
-                    <p className="mt-1 text-xs font-bold text-neutral-500">台本を見ながらこの画面で録音できます。</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {!recording ? (
-                      <Button label="録音開始" onClick={startRecording} icon={<Mic size={18} />} strong />
-                    ) : (
-                      <Button label="録音停止" onClick={stopRecording} icon={<Check size={18} />} strong />
-                    )}
-                    <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-neutral-200 bg-white px-4 py-3 text-sm font-black dark:border-neutral-700 dark:bg-neutral-950">
-                      <Upload size={18} />
-                      アップロード
-                      <input className="sr-only" type="file" accept="audio/*" onChange={(event) => event.target.files?.[0] && uploadAudio(event.target.files[0])} />
-                    </label>
-                    {(audioPreview || project.audioPath) && <Button label="字幕生成へ" onClick={transcribe} icon={<FileAudio size={18} />} />}
-                  </div>
-                </div>
-                {(audioPreview || project.audioPath) && <audio controls className="mt-3 w-full" src={audioPreview || toMediaUrl(project.audioPath) || undefined} />}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button label="ニュースに戻る" onClick={() => setView("news")} icon={<Newspaper size={18} />} />
