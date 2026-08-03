@@ -465,6 +465,12 @@ export default function Home() {
                   <Button label="背景素材を準備" onClick={collectAssets} icon={<Sparkles size={18} />} />
                   <Button label="動画生成" onClick={makeVideo} icon={state === "loading" ? <Loader2 className="animate-spin" size={18} /> : <Video size={18} />} strong />
                 </div>
+                {(message || project.errorMessage) && (
+                  <div className={`mt-4 flex items-start gap-2 rounded-md border px-3 py-2 text-sm leading-6 ${state === "error" || project.status === "VIDEO_FAILED" ? "border-amber-300 bg-amber-50 text-amber-900" : "border-teal-200 bg-teal-50 text-teal-900"}`}>
+                    {(state === "error" || project.status === "VIDEO_FAILED") && <AlertCircle className="mt-0.5 shrink-0" size={16} />}
+                    <span>{project.errorMessage || message}</span>
+                  </div>
+                )}
                 <div className="mt-4 grid gap-3">
                   <PreviewBox title="字幕プレビュー">
                     {cues.length ? cues.slice(0, 6).map((cue) => <p key={cue.index}>{cue.text}</p>) : <p>文字起こし後に表示されます。</p>}

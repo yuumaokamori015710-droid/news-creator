@@ -18,16 +18,20 @@ export async function generateVideo(project: Project) {
   const title = sanitizeDrawText(project.shortsTitle || project.news?.titleEn || "Japan News");
   const subtitlePath = project.subtitlePath.replace(/\\/g, "/").replace(/:/g, "\\:");
   const countdown = "drawtext=text='%{eif\\:max(0\\,60-t)\\:d}s':fontcolor=white:fontsize=56:x=w-tw-72:y=118:box=1:boxcolor=black@0.55:boxborderw=18";
+  const usesGeneratedBackground = path.extname(asset.localPath).toLowerCase() === ".svg";
+  const videoInputArgs = usesGeneratedBackground
+    ? ["-f", "lavfi", "-i", "color=c=0x173f3a:s=1080x1920:r=30"]
+    : ["-loop", "1", "-i", asset.localPath];
+  const baseVideoFilter = usesGeneratedBackground
+    ? "format=yuv420p,drawbox=x=0:y=0:w=1080:h=1920:color=black@0.12:t=fill"
+    : "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p,drawbox=x=0:y=0:w=1080:h=1920:color=black@0.28:t=fill";
   const args = [
     "-y",
-    "-loop",
-    "1",
-    "-i",
-    asset.localPath,
+    ...videoInputArgs,
     "-i",
     project.audioPath,
     "-vf",
-    `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p,drawbox=x=0:y=0:w=1080:h=1920:color=black@0.28:t=fill,drawtext=text='${title}':fontcolor=white:fontsize=60:x=72:y=120:box=1:boxcolor=black@0.45:boxborderw=22,${countdown},subtitles='${subtitlePath}'`,
+    `${baseVideoFilter},drawtext=text='${title}':fontcolor=white:fontsize=60:x=72:y=120:box=1:boxcolor=black@0.45:boxborderw=22,${countdown},subtitles='${subtitlePath}'`,
     "-r",
     "30",
     "-c:v",
@@ -41,14 +45,29 @@ export async function generateVideo(project: Project) {
   ];
 
   try {
-    await run(appConfig.ffmpegPath, args);
+    await run(resolveFfmpegPath(), args);
     updateProject(project.id, { status: "VIDEO_COMPLETED", videoPath: output, errorMessage: null });
     return output;
   } catch (error) {
     const message = error instanceof Error ? error.message : "FFmpeg failed.";
-    updateProject(project.id, { status: "VIDEO_FAILED", errorMessage: message });
-    throw new Error(message.includes("ENOENT") ? "FFmpeg was not found. Install FFmpeg or set FFMPEG_PATH in .env." : message);
+    const friendlyMessage = message.includes("ENOENT")
+      ? "FFmpegが見つかりません。プロジェクト依存のffmpeg-staticを入れるか、.envのFFMPEG_PATHにffmpeg.exeのパスを設定してください。"
+      : message;
+    updateProject(project.id, { status: "VIDEO_FAILED", errorMessage: friendlyMessage });
+    throw new Error(friendlyMessage);
   }
+}
+
+function resolveFfmpegPath() {
+  const configuredPath = appConfig.ffmpegPath;
+  if (configuredPath !== "ffmpeg" && commandExists(configuredPath)) return configuredPath;
+
+  const localBinary = path.join(process.cwd(), "node_modules", "ffmpeg-static", process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
+  return fs.existsSync(localBinary) ? localBinary : configuredPath;
+}
+
+function commandExists(command: string) {
+  return path.isAbsolute(command) && fs.existsSync(command);
 }
 
 function run(command: string, args: string[]) {
