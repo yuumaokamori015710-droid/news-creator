@@ -342,6 +342,24 @@ export default function Home() {
               </div>
             )}
 
+            {project?.videoPath && (
+              <div className="mt-4 grid gap-4 rounded-lg border border-teal-100 bg-teal-50 p-4 text-teal-950 dark:border-teal-900 dark:bg-teal-950 dark:text-teal-50 lg:grid-cols-[220px_minmax(0,1fr)]">
+                <video className="aspect-[9/16] max-h-[360px] rounded-md bg-black" src={toMediaUrl(project.videoPath) || undefined} controls />
+                <div className="min-w-0">
+                  <p className="text-sm font-black uppercase">最新の完成動画</p>
+                  <h3 className="mt-2 text-xl font-black leading-snug">{project.shortsTitle || project.news?.titleJa || "Japan News Shorts"}</h3>
+                  <p className="mt-2 text-sm font-bold opacity-80">初期画面からそのままプレビューできます。</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button label="動画画面で確認" onClick={() => setView("video")} icon={<Video size={18} />} strong />
+                    <a className="inline-flex items-center justify-center gap-2 rounded-md border border-teal-200 bg-white px-4 py-3 text-sm font-black text-teal-950 dark:border-teal-800 dark:bg-teal-950 dark:text-teal-50" href={toMediaUrl(project.videoPath) || "#"} download>
+                      <Download size={18} />
+                      MP4
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="mt-4 grid gap-3">
               {news.map((item, index) => (
                 <article key={item.id} className="rounded-lg border border-neutral-200 bg-[#fbfaf7] p-4 dark:border-neutral-800 dark:bg-neutral-950">

@@ -1,13 +1,15 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { appConfig, storage } from "./config";
+import { storage } from "./config";
 import { listAssets, updateProject } from "./db";
+import { getMediaDurationSeconds, normalizeFfmpegError, runFfmpeg } from "./ffmpeg";
+import { estimateDuration, makeSubtitleCues, saveSubtitles } from "./subtitles";
 import type { Project } from "./types";
 
 export async function generateVideo(project: Project) {
   if (!project.audioPath) throw new Error("Audio is required before video generation.");
-  if (!project.subtitlePath) throw new Error("Subtitles are required before video generation.");
+  const transcript = project.transcription || project.scriptEn;
+  if (!transcript) throw new Error("Script is required before video generation.");
   const assets = listAssets(project.id);
   const asset = assets[0];
   if (!asset) throw new Error("No background asset was prepared.");
@@ -15,15 +17,20 @@ export async function generateVideo(project: Project) {
   const output = path.join(storage.videos, `${project.id}.mp4`);
   updateProject(project.id, { status: "VIDEO_PROCESSING", errorMessage: null });
 
+  const mediaDuration = await getMediaDurationSeconds(project.audioPath);
+  const subtitleDuration = mediaDuration || project.estimatedDuration || estimateDuration(transcript);
+  const cues = makeSubtitleCues(transcript, subtitleDuration);
+  const { assPath } = saveSubtitles(project.id, cues);
+
   const title = sanitizeDrawText(project.shortsTitle || project.news?.titleEn || "Japan News");
-  const subtitlePath = project.subtitlePath.replace(/\\/g, "/").replace(/:/g, "\\:");
+  const subtitlePath = assPath.replace(/\\/g, "/").replace(/:/g, "\\:");
   const countdown = "drawtext=text='%{eif\\:max(0\\,60-t)\\:d}s':fontcolor=white:fontsize=56:x=w-tw-72:y=118:box=1:boxcolor=black@0.55:boxborderw=18";
   const usesGeneratedBackground = path.extname(asset.localPath).toLowerCase() === ".svg";
   const videoInputArgs = usesGeneratedBackground
     ? ["-f", "lavfi", "-i", "color=c=0x173f3a:s=1080x1920:r=30"]
     : ["-loop", "1", "-i", asset.localPath];
   const baseVideoFilter = usesGeneratedBackground
-    ? "format=yuv420p,drawbox=x=0:y=0:w=1080:h=1920:color=black@0.12:t=fill"
+    ? "format=yuv420p,noise=alls=16:allf=t+u,drawbox=x=(t*90)-floor(t*90/1260)*1260-180:y=0:w=180:h=1920:color=white@0.08:t=fill,drawbox=x=1080-((t*54)-floor(t*54/1320)*1320):y=0:w=150:h=1920:color=0x0f766e@0.22:t=fill,drawbox=x=0:y=0:w=1080:h=1920:color=black@0.10:t=fill"
     : "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p,drawbox=x=0:y=0:w=1080:h=1920:color=black@0.28:t=fill";
   const args = [
     "-y",
@@ -45,43 +52,14 @@ export async function generateVideo(project: Project) {
   ];
 
   try {
-    await run(resolveFfmpegPath(), args);
-    updateProject(project.id, { status: "VIDEO_COMPLETED", videoPath: output, errorMessage: null });
+    await runFfmpeg(args);
+    updateProject(project.id, { status: "VIDEO_COMPLETED", subtitlePath: assPath, videoPath: output, errorMessage: null });
     return output;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "FFmpeg failed.";
-    const friendlyMessage = message.includes("ENOENT")
-      ? "FFmpegが見つかりません。プロジェクト依存のffmpeg-staticを入れるか、.envのFFMPEG_PATHにffmpeg.exeのパスを設定してください。"
-      : message;
+    const friendlyMessage = normalizeFfmpegError(error);
     updateProject(project.id, { status: "VIDEO_FAILED", errorMessage: friendlyMessage });
     throw new Error(friendlyMessage);
   }
-}
-
-function resolveFfmpegPath() {
-  const configuredPath = appConfig.ffmpegPath;
-  if (configuredPath !== "ffmpeg" && commandExists(configuredPath)) return configuredPath;
-
-  const localBinary = path.join(process.cwd(), "node_modules", "ffmpeg-static", process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
-  return fs.existsSync(localBinary) ? localBinary : configuredPath;
-}
-
-function commandExists(command: string) {
-  return path.isAbsolute(command) && fs.existsSync(command);
-}
-
-function run(command: string, args: string[]) {
-  return new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, { windowsHide: true });
-    let stderr = "";
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      code === 0 ? resolve() : reject(new Error(stderr || `Command exited with code ${code}`));
-    });
-  });
 }
 
 function sanitizeDrawText(value: string) {
